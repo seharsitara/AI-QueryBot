@@ -1,34 +1,10 @@
 "use client";
 
-// ------------------------------------------------------------
-// Drag-and-drop upload zone for the /docs page.
-//
-// UX niceties over a bare dropzone:
-//   1. Pre-upload review dialog — whenever a drop contains
-//      duplicates OR rejected files (too large / wrong type /
-//      over the count limit), we show a single dialog listing
-//      EVERY dropped file tagged as: New, Duplicate (will
-//      replace), or Ignored (with the reason). All-clean drops
-//      (all new, nothing rejected) upload straight away.
-//   2. Per-file progress list — each uploading file shows its
-//      size and a live status, so the user always knows what's
-//      happening. Succeeded rows clear (they appear in the table
-//      below); only failures linger with their reason.
-//
-// react-dropzone enforces client-side constraints (count/size/
-// type); uploadDocsAction re-validates and performs replace+insert.
-// ------------------------------------------------------------
-
-import { useCallback, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { useDropzone, type FileRejection } from "react-dropzone";
 import { toast } from "sonner";
-import {
-  UploadCloud,
-  FileText,
-  Loader2,
-  CheckCircle2,
-  XCircle,
-} from "lucide-react";
+import { FileUp, UploadCloud, Loader2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,16 +28,11 @@ import {
   uploadDocsAction,
   checkDuplicateNames,
 } from "@/app/(dashboard)/docs/actions";
-
-type ItemStatus = "uploading" | "done" | "failed";
-
-interface UploadItem {
-  id: string;
-  name: string;
-  size: number;
-  status: ItemStatus;
-  reason?: string;
-}
+import {
+  UploadProgress,
+  type FileUploadPhase,
+  type UploadProgressItem,
+} from "./upload-progress";
 
 interface RejectedEntry {
   name: string;
@@ -69,14 +40,14 @@ interface RejectedEntry {
   reason: string;
 }
 
-// Everything a single drop produced, held until the user confirms.
 interface PendingReview {
-  accepted: File[]; // files that will actually upload
-  duplicateNames: string[]; // subset of accepted that replace an existing doc
-  rejected: RejectedEntry[]; // ignored files + why
+  accepted: File[];
+  duplicateNames: string[];
+  rejected: RejectedEntry[];
 }
 
-// Map a react-dropzone rejection to a short, human reason.
+type SessionPhase = "idle" | "checking" | "uploading" | "done";
+
 function rejectionReason(rej: FileRejection): string {
   const code = rej.errors[0]?.code;
   if (code === "file-too-large") {
@@ -91,84 +62,145 @@ function rejectionReason(rej: FileRejection): string {
   return rej.errors[0]?.message ?? "File rejected";
 }
 
+function makeItems(
+  files: File[],
+  phase: FileUploadPhase,
+  progress = 0,
+): UploadProgressItem[] {
+  return files.map((f) => ({
+    id: `${f.name}-${f.size}-${crypto.randomUUID()}`,
+    name: f.name,
+    size: f.size,
+    phase,
+    progress,
+  }));
+}
+
 export function UploadZone() {
-  const [isPending, startTransition] = useTransition();
-
-  // Visible per-file progress list (persists until the next drop).
-  const [items, setItems] = useState<UploadItem[]>([]);
-
-  // Drop held back for the review dialog (duplicates and/or rejects).
+  const router = useRouter();
+  const [, startTransition] = useTransition();
+  const [items, setItems] = useState<UploadProgressItem[]>([]);
+  const [sessionPhase, setSessionPhase] = useState<SessionPhase>("idle");
   const [review, setReview] = useState<PendingReview | null>(null);
 
-  // >0 while the post-drop duplicate check is running (the brief
-  // server round-trip before we upload or show the review dialog).
-  // Gives the user explicit feedback during that gap.
-  const [checkingCount, setCheckingCount] = useState(0);
+  const isBusy = sessionPhase === "checking" || sessionPhase === "uploading";
 
-  // Kick off the actual upload + reconcile the progress list with
-  // the server's per-file result.
-  const doUpload = useCallback((files: File[]) => {
-    if (files.length === 0) return;
-
-    const queued: UploadItem[] = files.map((f) => ({
-      id: `${f.name}-${f.size}-${crypto.randomUUID()}`,
-      name: f.name,
-      size: f.size,
-      status: "uploading",
-    }));
-    setItems(queued);
-
-    startTransition(async () => {
-      const form = new FormData();
-      files.forEach((f) => form.append("files", f));
-
-      const result = await uploadDocsAction(form);
-
-      if (!result.ok) {
+  useEffect(() => {
+    if (sessionPhase === "checking") {
+      const tick = setInterval(() => {
         setItems((prev) =>
-          prev.map((it) => ({
-            ...it,
-            status: "failed",
-            reason: result.error,
-          })),
+          prev.map((it) =>
+            it.phase === "checking" && it.progress < 32
+              ? { ...it, progress: it.progress + 4 }
+              : it,
+          ),
         );
-        toast.error(result.error);
-        return;
-      }
+      }, 120);
+      return () => clearInterval(tick);
+    }
+    if (sessionPhase === "uploading") {
+      const tick = setInterval(() => {
+        setItems((prev) =>
+          prev.map((it) =>
+            it.phase === "uploading" && it.progress < 92
+              ? { ...it, progress: it.progress + 3 }
+              : it,
+          ),
+        );
+      }, 160);
+      return () => clearInterval(tick);
+    }
+  }, [sessionPhase]);
 
-      const { uploadedCount, replacedCount, rejected } = result.data;
-      const reasonByName = new Map(rejected.map((r) => [r.name, r.reason]));
+  const overallPercent =
+    items.length === 0
+      ? 0
+      : Math.round(
+          items.reduce((sum, it) => sum + it.progress, 0) / items.length,
+        );
 
-      // Keep ONLY failed rows in the progress list. Succeeded files
-      // now live in the table below (as "Pending"), so leaving them
-      // here would just duplicate the same entries on screen.
+  const overallLabel =
+    sessionPhase === "checking"
+      ? "Step 1 of 2: Checking for duplicate file names"
+      : sessionPhase === "uploading"
+        ? "Step 2 of 2: Uploading to your library"
+        : sessionPhase === "done"
+          ? "Upload complete - see your documents in the table below"
+          : "Ready to upload";
+
+  const doUpload = useCallback(
+    (files: File[]) => {
+      if (files.length === 0) return;
+
       setItems((prev) =>
-        prev
-          .map((it) => {
-            const reason = reasonByName.get(it.name);
-            return reason
-              ? ({ ...it, status: "failed", reason } as UploadItem)
-              : ({ ...it, status: "done" } as UploadItem);
-          })
-          .filter((it) => it.status === "failed"),
+        prev.length > 0
+          ? prev.map((it) => ({
+              ...it,
+              phase: "uploading" as const,
+              progress: Math.max(40, it.progress),
+            }))
+          : makeItems(files, "uploading", 40),
       );
+      setSessionPhase("uploading");
 
-      if (uploadedCount > 0) {
-        const replacedNote =
-          replacedCount > 0 ? ` (${replacedCount} replaced)` : "";
-        toast.success(
-          `${uploadedCount} file${uploadedCount === 1 ? "" : "s"} uploaded${replacedNote}`,
+      startTransition(async () => {
+        const form = new FormData();
+        files.forEach((f) => form.append("files", f));
+
+        const result = await uploadDocsAction(form);
+
+        if (!result.ok) {
+          setItems((prev) =>
+            prev.map((it) => ({
+              ...it,
+              phase: "failed" as const,
+              progress: 100,
+              reason: result.error,
+            })),
+          );
+          setSessionPhase("done");
+          toast.error(result.error);
+          return;
+        }
+
+        const { uploadedCount, replacedCount, rejected } = result.data;
+        const reasonByName = new Map(rejected.map((r) => [r.name, r.reason]));
+
+        setItems((prev) =>
+          prev.map((it) => {
+            const reason = reasonByName.get(it.name);
+            if (reason) {
+              return {
+                ...it,
+                phase: "failed" as const,
+                progress: 100,
+                reason,
+              };
+            }
+            return { ...it, phase: "success" as const, progress: 100 };
+          }),
         );
-      }
-      for (const r of rejected) toast.error(`${r.name}: ${r.reason}`);
-    });
-  }, []);
+        setSessionPhase("done");
 
-  // react-dropzone splits the batch into accepted/rejected. We ask
-  // the server which of the accepted names already exist (a targeted
-  // ≤5-name lookup — never enumerates the user's library). A fully
-  // clean drop (all-new, nothing rejected) uploads immediately;
-  // otherwise we surface the review dialog.
+        if (uploadedCount > 0) {
+          const replacedNote =
+            replacedCount > 0 ? ` (${replacedCount} replaced)` : "";
+          toast.success(
+            `${uploadedCount} file${uploadedCount === 1 ? "" : "s"} uploaded${replacedNote}. Processing continues in the background.`,
+          );
+          router.refresh();
+        }
+        for (const r of rejected) toast.error(`${r.name}: ${r.reason}`);
+
+        setTimeout(() => {
+          setItems((prev) => prev.filter((it) => it.phase === "failed"));
+          setSessionPhase("idle");
+        }, 4000);
+      });
+    },
+    [router],
+  );
+
   const onDrop = useCallback(
     async (acceptedRaw: File[], rejections: FileRejection[]) => {
       const rejected: RejectedEntry[] = rejections.map((r) => ({
@@ -177,50 +209,57 @@ export function UploadZone() {
         reason: rejectionReason(r),
       }));
 
-      // Enforce the per-upload cap OURSELVES (react-dropzone's
-      // maxFiles rejects the whole batch when exceeded — bad UX).
-      // Keep the first N, ignore only the excess with a clear reason.
       const accepted = acceptedRaw.slice(0, MAX_FILES_PER_UPLOAD);
       for (const f of acceptedRaw.slice(MAX_FILES_PER_UPLOAD)) {
         rejected.push({
           name: f.name,
           size: f.size,
-          reason: `Only ${MAX_FILES_PER_UPLOAD} files per upload — skipped`,
+          reason: `Only ${MAX_FILES_PER_UPLOAD} files per upload - skipped`,
         });
+      }
+
+      if (accepted.length === 0 && rejected.length > 0) {
+        setItems(
+          rejected.map((r) => ({
+            id: `${r.name}-${r.size}-${crypto.randomUUID()}`,
+            name: r.name,
+            size: r.size,
+            phase: "failed" as const,
+            progress: 100,
+            reason: r.reason,
+          })),
+        );
+        setSessionPhase("done");
+        for (const r of rejected) toast.error(`${r.name}: ${r.reason}`);
+        return;
+      }
+
+      if (accepted.length > 0) {
+        setItems(makeItems(accepted, "checking", 8));
+        setSessionPhase("checking");
       }
 
       let duplicateNames: string[] = [];
       if (accepted.length > 0) {
-        setCheckingCount(accepted.length);
-        try {
-          const res = await checkDuplicateNames(accepted.map((f) => f.name));
-          if (res.ok) duplicateNames = res.data.duplicates;
-        } finally {
-          setCheckingCount(0);
-        }
+        const res = await checkDuplicateNames(accepted.map((f) => f.name));
+        if (res.ok) duplicateNames = res.data.duplicates;
       }
 
-      // Clean drop → no confirmation needed.
       if (duplicateNames.length === 0 && rejected.length === 0) {
         doUpload(accepted);
         return;
       }
 
+      setSessionPhase("idle");
+      setItems([]);
       setReview({ accepted, duplicateNames, rejected });
     },
     [doUpload],
   );
 
-  const isChecking = checkingCount > 0;
-  const isBusy = isPending || isChecking;
-
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
     accept: ACCEPTED_MIME_TYPES,
-    // No maxFiles here on purpose: react-dropzone rejects the ENTIRE
-    // drop when over the limit. We cap to MAX_FILES_PER_UPLOAD inside
-    // onDrop so valid files still go through and only the excess is
-    // ignored.
     maxSize: MAX_FILE_SIZE_BYTES,
     multiple: true,
     disabled: isBusy,
@@ -233,117 +272,96 @@ export function UploadZone() {
   const rejCount = review?.rejected.length ?? 0;
 
   return (
-    <div className="space-y-3">
-      <div
-        {...getRootProps()}
-        className={[
-          "flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed p-8 text-center transition-colors",
-          isDragActive
-            ? "border-foreground bg-muted/50"
-            : "border-border bg-muted/20",
-          isBusy ? "pointer-events-none opacity-70" : "",
-        ].join(" ")}
-      >
-        <input {...getInputProps()} />
+    <div className="space-y-4">
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-blue-50/40 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0f2d52]">
+              <FileUp className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-[#0f2d52]">
+                Upload documents
+              </h2>
+              <p className="text-xs text-slate-500">
+                PDF, Word, and text files - processed automatically after upload
+              </p>
+            </div>
+          </div>
+        </div>
 
-        {isChecking ? (
-          <>
-            <Loader2
-              className="h-7 w-7 animate-spin text-muted-foreground"
-              aria-hidden
-            />
-            <div>
-              <p className="text-sm font-medium">
-                Checking {checkingCount} file
-                {checkingCount === 1 ? "" : "s"}…
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Looking for existing documents with the same name
-              </p>
-            </div>
-          </>
-        ) : isPending ? (
-          <>
-            <Loader2
-              className="h-7 w-7 animate-spin text-muted-foreground"
-              aria-hidden
-            />
-            <div>
-              <p className="text-sm font-medium">Uploading…</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Saving your files — see progress below
-              </p>
-            </div>
-          </>
-        ) : (
-          <>
-            <UploadCloud
-              className="h-7 w-7 text-muted-foreground"
-              aria-hidden
-            />
-            <div>
-              <p className="text-sm font-medium">
-                {isDragActive
-                  ? "Drop to upload"
-                  : "Drag files here, or browse"}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {ACCEPTED_EXTENSIONS.join(", ")} · max {MAX_FILES_PER_UPLOAD}{" "}
-                files · {formatBytes(MAX_FILE_SIZE_BYTES)} each
-              </p>
-            </div>
-          </>
-        )}
-
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={open}
-          disabled={isBusy}
+        <div
+          {...getRootProps()}
+          className={[
+            "m-4 flex flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed p-10 text-center transition-all",
+            isDragActive
+              ? "border-[#0f2d52] bg-blue-50/50"
+              : "border-slate-200 bg-slate-50/50 hover:border-slate-300 hover:bg-slate-50",
+            isBusy ? "pointer-events-none opacity-80" : "",
+          ].join(" ")}
         >
-          {isChecking
-            ? "Checking…"
-            : isPending
-              ? "Uploading…"
-              : "Choose files"}
-        </Button>
-      </div>
+          <input {...getInputProps()} />
 
-      {/* Per-file progress list */}
-      {items.length > 0 && (
-        <ul className="divide-y rounded-lg border">
-          {items.map((it) => (
-            <li
-              key={it.id}
-              className="flex items-center gap-3 px-3 py-2.5 text-sm"
-            >
-              <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{it.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {formatBytes(it.size)}
-                  {it.status === "failed" && it.reason ? (
-                    <span className="text-destructive"> · {it.reason}</span>
-                  ) : null}
+          {isBusy && items.length > 0 ? (
+            <>
+              <Loader2 className="h-10 w-10 animate-spin text-[#0f2d52]" />
+              <div>
+                <p className="text-sm font-semibold text-[#0f2d52]">
+                  Processing your upload
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Track each file in the progress panel below
                 </p>
               </div>
-              <StatusIcon status={it.status} />
-            </li>
-          ))}
-        </ul>
-      )}
+            </>
+          ) : (
+            <>
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0f2d52]/10">
+                <UploadCloud className="h-7 w-7 text-[#0f2d52]" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[#0f2d52]">
+                  {isDragActive
+                    ? "Drop files to upload"
+                    : "Drag and drop files here"}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {ACCEPTED_EXTENSIONS.join(", ")} - up to{" "}
+                  {MAX_FILES_PER_UPLOAD} files -{" "}
+                  {formatBytes(MAX_FILE_SIZE_BYTES)} each
+                </p>
+              </div>
+            </>
+          )}
 
-      {/* Pre-upload review: duplicates + ignored files */}
+          <Button
+            type="button"
+            className="rounded-lg bg-[#0f2d52] text-white hover:bg-[#0c2442]"
+            onClick={open}
+            disabled={isBusy}
+          >
+            {isBusy ? "Please wait..." : "Browse files"}
+          </Button>
+        </div>
+      </div>
+
+      <UploadProgress
+        items={items}
+        overallLabel={overallLabel}
+        overallPercent={overallPercent}
+      />
+
       <AlertDialog
         open={review !== null}
         onOpenChange={(o) => !o && setReview(null)}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle>Review upload</AlertDialogTitle>
+            <AlertDialogTitle className="text-[#0f2d52]">
+              Review upload
+            </AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div className="space-y-2">
+              <div className="space-y-2 text-slate-600">
                 <p>
                   {acceptedCount > 0 ? (
                     <>
@@ -372,26 +390,23 @@ export function UploadZone() {
             </AlertDialogDescription>
           </AlertDialogHeader>
 
-          {/* File breakdown */}
           <ul className="max-h-64 space-y-1 overflow-y-auto">
             {review?.accepted.map((f) => {
               const isDup = review.duplicateNames.includes(f.name);
               return (
                 <li
                   key={`a-${f.name}-${f.size}`}
-                  className="flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-xs"
+                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-xs"
                 >
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-foreground">
+                    <p className="truncate font-medium text-[#0f2d52]">
                       {f.name}
                     </p>
-                    <p className="text-muted-foreground">
-                      {formatBytes(f.size)}
-                    </p>
+                    <p className="text-slate-500">{formatBytes(f.size)}</p>
                   </div>
                   {isDup ? (
-                    <Badge variant="secondary" className="shrink-0">
-                      Duplicate · will replace
+                    <Badge className="shrink-0 bg-amber-100 text-amber-800 hover:bg-amber-100">
+                      Duplicate - will replace
                     </Badge>
                   ) : (
                     <Badge variant="outline" className="shrink-0">
@@ -405,14 +420,14 @@ export function UploadZone() {
             {review?.rejected.map((r) => (
               <li
                 key={`r-${r.name}-${r.size}`}
-                className="flex items-center justify-between gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-1.5 text-xs"
+                className="flex items-center justify-between gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs"
               >
                 <div className="min-w-0">
-                  <p className="truncate font-medium text-foreground">
+                  <p className="truncate font-medium text-[#0f2d52]">
                     {r.name}
                   </p>
-                  <p className="text-muted-foreground">
-                    {formatBytes(r.size)} · {r.reason}
+                  <p className="text-slate-500">
+                    {formatBytes(r.size)} - {r.reason}
                   </p>
                 </div>
                 <Badge variant="destructive" className="shrink-0">
@@ -428,6 +443,7 @@ export function UploadZone() {
             </AlertDialogCancel>
             {acceptedCount > 0 && (
               <AlertDialogAction
+                className="bg-[#0f2d52] hover:bg-[#0c2442]"
                 onClick={() => {
                   const files = review?.accepted ?? [];
                   setReview(null);
@@ -443,31 +459,5 @@ export function UploadZone() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  );
-}
-
-// Small status glyph for each file row.
-function StatusIcon({ status }: { status: ItemStatus }) {
-  if (status === "uploading") {
-    return (
-      <Loader2
-        className="h-4 w-4 shrink-0 animate-spin text-muted-foreground"
-        aria-label="Uploading"
-      />
-    );
-  }
-  if (status === "done") {
-    return (
-      <CheckCircle2
-        className="h-4 w-4 shrink-0 text-foreground"
-        aria-label="Uploaded"
-      />
-    );
-  }
-  return (
-    <XCircle
-      className="h-4 w-4 shrink-0 text-destructive"
-      aria-label="Failed"
-    />
   );
 }

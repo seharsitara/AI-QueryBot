@@ -2,20 +2,10 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { AuthToasts } from "../auth-toasts";
 import { SubmitButton } from "../submit-button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { AuthLabel, authInputClass } from "../auth-ui";
+import { PasswordInput } from "../password-input";
 import { signUp } from "../actions";
 
-// Server-rendered signup page. Same pattern as /login — errors
-// arrive via search params from the server action's `redirect()`.
 type SearchParams = Promise<{ error?: string }>;
 
 export default async function SignupPage({
@@ -26,59 +16,63 @@ export default async function SignupPage({
   const { error } = await searchParams;
 
   return (
-    <Card className="w-full max-w-sm">
+    <div className="w-full max-w-md rounded-2xl border border-slate-100 bg-white p-8 shadow-lg shadow-slate-200/50 sm:p-10">
       <Suspense fallback={null}>
         <AuthToasts />
       </Suspense>
-      <CardHeader>
-        <CardTitle className="text-2xl">Create account</CardTitle>
-        <CardDescription>
-          Sign up with email + password. No verification step in local dev.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form action={signUp} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              placeholder="you@example.com"
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              minLength={6}
-              required
-            />
-            <p className="text-xs text-muted-foreground">
-              At least 6 characters.
-            </p>
-          </div>
 
-          {error && (
-            <p className="text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          )}
+      <div className="mb-8 text-center">
+        <h1 className="text-3xl font-bold tracking-tight text-[#0f2d52]">
+          Create Account
+        </h1>
+        <p className="mt-2 text-sm text-slate-500">Start your free trial.</p>
+      </div>
 
-          <SubmitButton>Create account</SubmitButton>
-        </form>
-      </CardContent>
-      <CardFooter className="justify-center text-sm text-muted-foreground">
-        Already have an account?&nbsp;
-        <Link href="/login" className="font-medium text-foreground underline">
-          Sign in
+      <form action={signUp} className="space-y-5">
+        <div className="space-y-2">
+          <AuthLabel htmlFor="email">Email Address</AuthLabel>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            placeholder="john@example.com"
+            required
+            className={authInputClass}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <AuthLabel htmlFor="password">Password</AuthLabel>
+          <PasswordInput
+            id="password"
+            autoComplete="new-password"
+            minLength={6}
+            required
+          />
+          <p className="text-xs text-slate-500">At least 6 characters.</p>
+        </div>
+
+        {error && (
+          <p className="text-sm text-red-600" role="alert">
+            {error}
+          </p>
+        )}
+
+        <SubmitButton className="h-11 rounded-lg bg-[#0f2d52] text-base font-semibold text-white shadow-md shadow-[#0f2d52]/25 hover:bg-[#0c2442]">
+          Create My Account
+        </SubmitButton>
+      </form>
+
+      <p className="mt-8 text-center text-sm text-slate-500">
+        Already have an account?{" "}
+        <Link
+          href="/login"
+          className="font-semibold text-[#1e4a7a] hover:underline"
+        >
+          Sign In
         </Link>
-      </CardFooter>
-    </Card>
+      </p>
+    </div>
   );
 }

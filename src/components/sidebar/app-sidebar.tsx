@@ -26,8 +26,8 @@ export async function AppSidebar({ userEmail }: AppSidebarProps) {
       {/* Brand + New chat (outline so it reads as an action, not the
           currently-selected page — that's what SidebarNav shows) */}
       <div className="flex flex-col gap-3 p-3">
-        <Link href="/chat" className="px-2 text-sm font-semibold">
-          RAG Chatbot
+        <Link href="/chat" className="px-2 text-sm font-semibold text-[#0f2d52]">
+          QueryBot
         </Link>
         <Button
           asChild
@@ -38,6 +38,16 @@ export async function AppSidebar({ userEmail }: AppSidebarProps) {
           <Link href="/chat">
             <Plus className="h-3.5 w-3.5" />
             New chat
+          </Link>
+        </Button>
+        <Button
+          asChild
+          size="sm"
+          className="w-full justify-start gap-2 bg-[#0f2d52] hover:bg-[#0c2442]"
+        >
+          <Link href="/chat/multi">
+            <Plus className="h-3.5 w-3.5" />
+            Multi-doc chat
           </Link>
         </Button>
       </div>

@@ -51,7 +51,9 @@ export function ThreadsList({ threads }: ThreadsListProps) {
     e.preventDefault();
     if (!pendingDelete) return;
     const target = pendingDelete;
-    const isViewing = pathname === `/chat/${target.id}`;
+    const isViewing =
+      pathname === `/chat/${target.id}` ||
+      pathname === `/chat/multi/${target.id}`;
 
     startDelete(async () => {
       const result = await deleteThreadAction({
@@ -80,14 +82,20 @@ export function ThreadsList({ threads }: ThreadsListProps) {
   const bookmarked = threads.filter((t) => t.is_bookmarked);
   const recent = threads.filter((t) => !t.is_bookmarked);
 
+  function threadHref(thread: Thread) {
+    const ids = thread.selected_doc_ids ?? [];
+    return ids.length > 0 ? `/chat/multi/${thread.id}` : `/chat/${thread.id}`;
+  }
+
   const renderRow = (thread: Thread) => {
-    const isActive = pathname === `/chat/${thread.id}`;
+    const href = threadHref(thread);
+    const isActive = pathname === href;
     const isRowDeleting = isDeleting && pendingDelete?.id === thread.id;
     const isRowBookmarking = bookmarkingId === thread.id;
     return (
       <li key={thread.id} className="group/thread relative w-full max-w-full overflow-hidden">
         <Link
-          href={`/chat/${thread.id}`}
+          href={href}
           className={cn(
             "flex w-full items-center gap-2 overflow-hidden rounded-md py-1.5 pl-2 pr-[3.25rem] text-xs transition-colors",
             isActive

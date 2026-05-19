@@ -1,14 +1,16 @@
-// Centered, full-bleed layout for /login and /signup pages.
-// Kept deliberately minimal — the dashboard layout (sidebar etc.)
-// lives under (dashboard)/ and never wraps these screens.
+import { AuthNav } from "./auth-nav";
+
 export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
-      {children}
-    </main>
+    <div className="min-h-screen bg-[#f8fafc]">
+      <AuthNav />
+      <main className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-10">
+        {children}
+      </main>
+    </div>
   );
 }

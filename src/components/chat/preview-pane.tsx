@@ -1,24 +1,8 @@
 "use client";
 
-// ------------------------------------------------------------
-// Right-side document preview. Render-only — no citations.
-//
-// Behaviour by file_type:
-//   • pdf → embed the ORIGINAL file in an <iframe> via a
-//           short-lived Supabase signed URL, so the browser
-//           renders it exactly as the source PDF.
-//   • txt → render the canonical extracted text as plain text.
-//
-// The user picks a doc from the dropdown; it renders here. Per
-// doc, the resolved URL/text is fetched once and cached for the
-// component's lifetime (signed URLs are valid ~30 min, longer
-// than a typical session of flipping between docs).
-// ------------------------------------------------------------
-
 import { useEffect, useRef, useState } from "react";
-import { X, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { FileText, Loader2 } from "lucide-react";
+import { PdfPreview } from "./pdf-preview";
 import {
   getDocExtractedText,
   getDocFileUrl,
@@ -26,23 +10,23 @@ import {
 import type { Doc } from "@/types/doc";
 
 interface PreviewPaneProps {
-  docs: Doc[]; // docs available to preview
+  docs: Doc[];
   activeDocId: string | null;
   onActiveDocChange: (docId: string) => void;
-  onClose: () => void;
 }
 
-// Resolved, renderable form of a doc — cached per docId.
 type Resolved =
   | { kind: "pdf"; url: string }
   | { kind: "docx"; url: string }
   | { kind: "txt"; text: string };
 
+const scrollHidden =
+  "overflow-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden";
+
 export function PreviewPane({
   docs,
   activeDocId,
   onActiveDocChange,
-  onClose,
 }: PreviewPaneProps) {
   const cacheRef = useRef<Map<string, Resolved>>(new Map());
   const [resolved, setResolved] = useState<Resolved | null>(null);
@@ -51,7 +35,6 @@ export function PreviewPane({
 
   const activeDoc = docs.find((d) => d.id === activeDocId) ?? null;
 
-  // Load (or read from cache) the active doc's renderable form.
   useEffect(() => {
     let cancelled = false;
 
@@ -73,13 +56,10 @@ export function PreviewPane({
 
     const load = async (): Promise<Resolved | { error: string }> => {
       if (activeDoc.file_type === "pdf" || activeDoc.file_type === "docx") {
-        // Both render from the original file via a signed URL: pdf
-        // in a native <iframe>, docx through docx-preview.
         const res = await getDocFileUrl(activeDocId);
         if (!res.ok) return { error: res.error };
         return { kind: activeDoc.file_type, url: res.data.url };
       }
-      // txt → canonical extracted text
       const res = await getDocExtractedText(activeDocId);
       return res.ok
         ? { kind: "txt", text: res.data.text }
@@ -104,9 +84,6 @@ export function PreviewPane({
     };
   }, [activeDocId, activeDoc]);
 
-  // docx → render via docx-preview into a container node. Separate
-  // effect: it needs the resolved signed URL AND a mounted DOM node,
-  // and docx-preview is browser-only so it's imported lazily.
   const docxRef = useRef<HTMLDivElement>(null);
   const [docxRendering, setDocxRendering] = useState(false);
 
@@ -148,23 +125,30 @@ export function PreviewPane({
   }, [resolved]);
 
   return (
-    <div className="flex h-full flex-col bg-background">
-      {/* Header: doc switcher + close */}
-      <div className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
-        <span className="text-xs font-medium text-muted-foreground">
-          Preview
-        </span>
+    <div className="flex h-full flex-col border-l border-slate-200 bg-white">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-slate-200 bg-slate-50/80 px-4">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0f2d52]">
+          <FileText className="h-4 w-4 text-white" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-[#0f2d52]">
+            Document Preview
+          </p>
+          <p className="truncate text-[10px] text-slate-500">
+            {activeDoc?.file_name ?? "Select a document"}
+          </p>
+        </div>
         <select
           value={activeDocId ?? ""}
           onChange={(e) => onActiveDocChange(e.target.value)}
           disabled={docs.length === 0}
-          className="min-w-0 flex-1 truncate rounded-md border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
+          className="max-w-[180px] truncate rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-[#0f2d52] focus:outline-none focus:ring-2 focus:ring-[#0f2d52]/20"
         >
           {docs.length === 0 ? (
             <option value="">No documents</option>
           ) : (
             <>
-              {!activeDocId && <option value="">Select a document…</option>}
+              {!activeDocId && <option value="">Select a document</option>}
               {docs.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.file_name}
@@ -173,62 +157,49 @@ export function PreviewPane({
             </>
           )}
         </select>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-          className="h-7 w-7 shrink-0"
-          aria-label="Close preview"
-        >
-          <X className="h-4 w-4" />
-        </Button>
       </div>
 
-      {/* Body */}
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 flex-1 bg-slate-50/30">
         {loading ? (
-          <div className="flex h-full items-center justify-center">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <div className="flex h-full flex-col items-center justify-center gap-2">
+            <Loader2 className="h-6 w-6 animate-spin text-[#0f2d52]" />
+            <p className="text-xs text-slate-500">Loading document...</p>
           </div>
         ) : error ? (
           <div className="flex h-full items-center justify-center px-6 text-center">
-            <p className="text-xs text-destructive">{error}</p>
+            <p className="text-xs text-red-600">{error}</p>
           </div>
         ) : !activeDoc || !resolved ? (
-          <div className="flex h-full items-center justify-center px-6 text-center">
-            <p className="text-xs text-muted-foreground">
-              Select a document to preview it here.
+          <div className="flex h-full flex-col items-center justify-center px-6 text-center">
+            <FileText className="mb-3 h-10 w-10 text-slate-300" />
+            <p className="text-sm font-medium text-[#0f2d52]">
+              No document selected
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Choose a file from the dropdown to preview it here
             </p>
           </div>
         ) : resolved.kind === "pdf" ? (
-          <iframe
-            key={activeDoc.id}
-            src={resolved.url}
-            title={activeDoc.file_name}
-            className="h-full w-full border-0"
-          />
+          <PdfPreview key={activeDoc.id} url={resolved.url} />
         ) : resolved.kind === "docx" ? (
           <div className="relative h-full w-full">
             {docxRendering && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70">
+                <Loader2 className="h-6 w-6 animate-spin text-[#0f2d52]" />
               </div>
             )}
-            {/* docx-preview renders its own Word-like wrapper
-                (gray canvas, white pages, shadows) into this node. */}
             <div
               key={activeDoc.id}
               ref={docxRef}
-              className="h-full w-full overflow-auto"
+              className={`h-full w-full bg-white ${scrollHidden}`}
             />
           </div>
         ) : (
-          <ScrollArea className="h-full">
-            <pre className="whitespace-pre-wrap break-words px-4 py-4 font-sans text-[13px] leading-6 text-foreground">
+          <div className={`h-full ${scrollHidden}`}>
+            <pre className="whitespace-pre-wrap break-words px-5 py-5 font-sans text-[13px] leading-6 text-slate-700">
               {resolved.text}
             </pre>
-          </ScrollArea>
+          </div>
         )}
       </div>
     </div>

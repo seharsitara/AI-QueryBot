@@ -8,6 +8,7 @@ const AUTH_ONLY_ROUTES = ["/login", "/signup"];
 // Routes that don't require a Supabase session. Anything else is
 // auth-gated. /api/cron lives here because it carries its own shared
 // secret in the `x-cron-secret` header.
+const PUBLIC_ROUTES = ["/"];
 const PUBLIC_PREFIXES = ["/login", "/signup", "/auth", "/api/cron"];
 
 /**
@@ -49,7 +50,9 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isPublic = PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
+  const isPublic =
+    PUBLIC_ROUTES.includes(pathname) ||
+    PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
 
   // Logged out + protected route → /login
   if (!user && !isPublic) {
