@@ -21,6 +21,7 @@ import {
 } from "@/repositories/docs";
 import type { Doc } from "@/types/doc";
 import { deleteDocChunks, listDocChunks } from "@/lib/qdrant/search";
+import { summarizeDocument } from "@/lib/rag/doc-summarizer";
 import {
   ACCEPTED_MIME_TYPES,
   MAX_FILES_PER_UPLOAD,
@@ -402,6 +403,72 @@ export async function getDocChunks(
 // for this user. Targeted indexed query — does NOT enumerate the
 // user's documents, so it scales to any doc count.
 // ============================================================
+// ============================================================
+// generateDocSummary
+// ------------------------------------------------------------
+// AI summary for one completed doc. Uses scoped vector retrieval
+// (read-only) plus optional extracted-text fallback. Does not
+// touch the ingestion pipeline or chat RAG route.
+// ============================================================
+export async function generateDocSummaryAction(
+  docId: string,
+): Promise<ActionResult<{ summary: string }>> {
+  const user = await requireUser();
+
+  const doc = await getDocById(docId);
+  if (!doc) {
+    return { ok: false, error: "Document not found" };
+  }
+  if (doc.status !== "completed") {
+    return { ok: false, error: "Document is not processed yet" };
+  }
+
+  try {
+    const summary = await summarizeDocument({
+      userId: user.id,
+      docId: doc.id,
+      fileName: doc.file_name,
+    });
+    return { ok: true, data: { summary } };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (message !== "No text available to summarize.") {
+      console.error("[generateDocSummary] failed", err);
+      return {
+        ok: false,
+        error: "Could not generate summary. Please try again.",
+      };
+    }
+  }
+
+  const textRes = await getDocExtractedText(docId);
+  if (!textRes.ok) {
+    return { ok: false, error: "No text available to summarize." };
+  }
+
+  try {
+    const summary = await summarizeDocument({
+      userId: user.id,
+      docId: doc.id,
+      fileName: doc.file_name,
+      fallbackText: textRes.data.text,
+    });
+    return { ok: true, data: { summary } };
+  } catch (err) {
+    console.error("[generateDocSummary] fallback failed", err);
+    if (
+      err instanceof Error &&
+      err.message === "No text available to summarize."
+    ) {
+      return { ok: false, error: err.message };
+    }
+    return {
+      ok: false,
+      error: "Could not generate summary. Please try again.",
+    };
+  }
+}
+
 export async function checkDuplicateNames(
   names: string[],
 ): Promise<ActionResult<{ duplicates: string[] }>> {

@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/table";
 import { StatusBadge } from "./status-badge";
 import { DeleteDocButton } from "./delete-doc-button";
+import { GenerateSummaryButton } from "./generate-summary-button";
 import { DocName } from "./doc-name";
 import type { Doc } from "@/types/doc";
 import { formatBytes, formatRelative } from "@/lib/utils/format";
@@ -49,7 +50,7 @@ export function DocsTable({ docs }: Props) {
             <TableHead className="font-semibold text-[#0f2d52]">
               Processed
             </TableHead>
-            <TableHead className="w-12" />
+            <TableHead className="w-24 text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -87,7 +88,14 @@ export function DocsTable({ docs }: Props) {
                 {formatRelative(doc.processed_at)}
               </TableCell>
               <TableCell className="text-right">
-                <DeleteDocButton docId={doc.id} fileName={doc.file_name} />
+                <div className="flex items-center justify-end gap-0.5">
+                  <GenerateSummaryButton
+                    docId={doc.id}
+                    fileName={doc.file_name}
+                    status={doc.status}
+                  />
+                  <DeleteDocButton docId={doc.id} fileName={doc.file_name} />
+                </div>
               </TableCell>
             </TableRow>
           ))}

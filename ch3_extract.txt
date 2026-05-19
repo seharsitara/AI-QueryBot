@@ -1,0 +1,458 @@
+﻿found ch3 start at pdf page 11
+found ch3 start at pdf page 29
+=== PDF PAGE 27 ===
+University of Education, Lahore
+QueryBot
+13
+2.4.1 Description of Non-Functional Requirement
+1. Security
+Includes secure authentication, protected API access, hashed password storage,
+and controlled access to user-specific documents and chat sessions. API
+communication should be deployed over secure transport in production
+environments. The system applies practical safeguards for MVP-level privacy and
+access protection.
+2. Usability
+Provides a clean interface, straightforward navigation, and guided workflows for
+uploading documents, asking questions, reading citations, and viewing summaries.
+The frontend layout is designed to minimize user confusion and support smooth
+interaction.
+3. Logging and Monitoring
+Tracks API/runtime errors, document processing failures, and retrieval/response
+behavior through application logging. These logs support debugging, issue
+diagnosis, and gradual quality improvement of the platform.
+4. Accessibility
+Supports readability through clear typography, consistent layout, and
+understandable interaction flow. The current implementation emphasizes practical
+usability; advanced accessibility features (e.g., speech output or full WCAG
+optimization) can be added in future versions.
+5. Scalability
+Uses vector indexing and retrieval architecture suitable for increasing document
+collections and user queries. The design is extensible for future infrastructure
+scaling, although distributed load-balancing architecture is outside the current
+MVP scope.
+6. Performance
+Targets an interactive response experience for document retrieval and question
+answering under typical usage conditions. Actual latency depends on document
+size, retrieval depth, and external LLM API response time; therefore, strict sub-
+second guarantees are not assumed.
+7. Maintainability
+The system follows a modular backend/frontend structure that supports easier
+feature enhancement, bug fixing, and configuration updates. This architecture
+allows future improvements such as model replacement, retrieval tuning, and
+interface refinement with limited disruption.
+
+=== PDF PAGE 28 ===
+University of Education, Lahore
+QueryBot
+14
+8. Reliability
+Provides dependable operation through consistent route behavior, controlled
+exception handling, and persistent storage of documents, vectors, and chat
+sessions. The platform is designed for stable usage in its current scope, with high-
+availability/failover capabilities considered future enhancements.
+
+=== PDF PAGE 29 ===
+University of Education, Lahore
+QueryBot
+15
+CHAPTER 03
+Analysis
+
+=== PDF PAGE 30 ===
+University of Education, Lahore
+QueryBot
+16
+3.1 Introduction
+The analysis phase translates project requirements into clear system behavior by
+identifying user goals, system boundaries, interaction flows, and processing logic. For
+QueryBot, analysis focuses on how a registered user interacts with a document-centric
+AI assistant to upload files, generate embeddings, ask context-aware questions, receive
+source-grounded responses, and maintain persistent chat sessions.
+QueryBot is implemented as a web-based client-server system where the frontend
+(Next.js) manages user interaction and the backend (FastAPI) handles authentication,
+document processing, retrieval-augmented generation (RAG), citation mapping, and
+chat/session persistence. Since the system does not include an administrative role, all
+analysis artifacts in this chapter model only the User as the primary actor and the
+System as the supporting actor that validates requests, executes processing pipelines,
+and returns results.
+3.2 User Use Cases
+UC Number: UC_QB_01
+UC Name: Register Account
+Primary Actor: User
+Secondary Actor: System (Authentication Service, Database)
+Description:
+The user creates a new account with email and password so they can access protected
+QueryBot features.
+Preconditions:
+∩ü¼ User can open the application.
+∩ü¼ User is not already logged in (or chooses to register).
+Main Success Scenario:
+∩ü¼ User opens the Register page.
+∩ü¼ User enters email and password.
+∩ü¼ User accepts Terms of Service / Privacy Policy (required on register screen).
+∩ü¼ System validates email format and password rules (minimum length and special
+character) via client-side checks.
+∩ü¼ User submits the form.
+∩ü¼ System sends POST /auth/register with email and password.
+∩ü¼ System checks that the email is not already registered.
+∩ü¼ System stores the user with hashed password in the database.
+∩ü¼ System automatically performs login (POST /auth/login) and receives a JWT
+access token.
+∩ü¼ System stores the token for authenticated requests.
+∩ü¼ User is redirected to /documents.
+Alternative Scenario:
+
+=== PDF PAGE 31 ===
+University of Education, Lahore
+QueryBot
+17
+∩ü¼ Email already exists ΓåÆ API returns error; UI shows ΓÇ£Email already registeredΓÇ¥
+(or equivalent server message).
+∩ü¼ Invalid email / weak password ΓåÆ UI shows inline validation before submit.
+∩ü¼ Terms not accepted ΓåÆ UI shows validation message; registration does not
+proceed.
+∩ü¼ Backend unavailable or request fails ΓåÆ UI shows error message; user may retry.
+Postcondition:
+∩ü¼ A new user record exists and the user is authenticated with a valid JWT, ready to
+use documents and chat.
+UC Number: UC_QB_02
+UC Name: Login
+Primary Actor: User
+Secondary Actor: System (Authentication Service, Database)
+Description:
+The user signs in with an existing email and password to obtain a JWT and access
+protected areas of QueryBot.
+Preconditions:
+∩ü¼ User can open the application.
+∩ü¼ User has a registered account (same email/password pair stored in the system).
+Main Success Scenario:
+∩ü¼ User opens the Login page.
+∩ü¼ User enters email and password.
+∩ü¼ System validates email format and password rules via client-side checks (before
+calling the API).
+∩ü¼ User submits the form.
+∩ü¼ System sends POST /auth/login with email and password.
+∩ü¼ System verifies credentials against the hashed password in the database.
+∩ü¼ System returns a JWT access token.
+∩ü¼ System stores the token for authenticated requests.
+∩ü¼ User is redirected to the intended route (default /documents, or next query if used).
+Alternative Scenario:
+∩ü¼ Wrong email or password ΓåÆ API returns 401; UI shows ΓÇ£Incorrect email or
+password.ΓÇ¥
+∩ü¼ Invalid email / password not meeting rules ΓåÆ inline validation; login request is
+not sent until fixed.
+∩ü¼ Backend unavailable ΓåÆ UI shows error; user may retry.
+Postcondition:
+∩ü¼ User holds a valid JWT and is authorized to access documents, chat, and related
+protected features.
+
+=== PDF PAGE 32 ===
+University of Education, Lahore
+QueryBot
+18
+UC Number: UC_QB_03
+UC Name: Upload Document (PDF/DOCX/TXT)
+Primary Actor: User
+Secondary Actor: System (Document Service, Database, Parser Service)
+Description: User uploads a supported document, and the system stores it, extracts
+text, and prepares it for AI retrieval.
+Preconditions:
+∩ü¼ User is authenticated.
+∩ü¼ File is in supported format and within size limit.
+Main Success Scenario:
+∩ü¼ User selects a file from local device.
+∩ü¼ System validates extension and file size.
+∩ü¼ System saves file to storage.
+∩ü¼ System extracts text content from the file.
+∩ü¼ System creates document metadata record.
+∩ü¼ System triggers indexing preparation for retrieval.
+∩ü¼ System confirms successful upload and updates document list.
+Alternative Scenario:
+∩ü¼ Unsupported file type -> system rejects upload with validation message.
+∩ü¼ File too large -> system rejects upload and shows limit warning.
+∩ü¼ Extraction failure/corrupted file -> system returns readable processing error.
+Postcondition:
+Document is available in userΓÇÖs library for preview, querying, and summarization.
+UC Number: UC_QB_04
+UC Name: View Document Preview
+Primary Actor: User
+Secondary Actor: System (Preview Service, File Storage)
+Description: User opens document preview to inspect uploaded content before or
+during querying
+.Preconditions:
+∩ü¼ User is authenticated.
+Selected document belongs to user and exists in storage
+Main Success Scenario:
+∩ü¼ User clicks preview for a document.
+∩ü¼ System verifies user ownership.
+∩ü¼ System checks file type.
+∩ü¼ For PDF, system streams file directly.
+∩ü¼ For DOCX, system serves converted preview PDF if available.
+∩ü¼ Preview is shown in the interface.
+Alternative Scenario:
+∩ü¼ Preview file missing -> system returns ΓÇ£Preview not found.ΓÇ¥
+∩ü¼ Original file missing -> system returns ΓÇ£File not found on server.ΓÇ¥
+∩ü¼ Unauthorized access attempt -> system denies request.
+
+=== PDF PAGE 33 ===
+University of Education, Lahore
+QueryBot
+19
+Postcondition:
+User can view document content in preview mode.
+UC Number: UC_QB_05
+UC Name: Initiate Semantic Search
+Primary Actor: User
+Secondary Actor: System (RAG Service, Vector Store, LLM Service, Database)
+Description: User asks a natural-language question, and QueryBot returns a context-
+grounded answer from uploaded documents.
+Preconditions:
+∩ü¼ User is authenticated.
+∩ü¼ At least one document is available/indexed.
+∩ü¼ User submits a non-empty query.
+Main Success Scenario:
+∩ü¼ User enters a question in chat.
+∩ü¼ System validates selected document scope.
+∩ü¼ System retrieves relevant chunks from vector index.
+∩ü¼ System constructs prompt with retrieved context.
+∩ü¼ System calls LLM for response generation.
+∩ü¼ System maps sources/citations from retrieved chunks.
+∩ü¼ System stores both user and assistant messages.
+∩ü¼ System returns answer with citations.
+Alternative Scenario:
+∩ü¼ No relevant chunks found -> system returns graceful ΓÇ£information not foundΓÇ¥
+response.
+∩ü¼ LLM/API call fails -> system returns fallback error message.
+∩ü¼ Session/document mismatch -> system blocks request with validation error.
+Postcondition:
+Answer and source metadata are saved and displayed.
+UC Number: UC_QB_06
+UC Name: Generate Document Summary
+Primary Actor: User
+Secondary Actor: System (RAG Service, LLM Service)
+Description: User requests an AI-generated summary of a selected document.
+Preconditions:
+∩ü¼ User is authenticated.
+∩ü¼ Document exists and belongs to user.
+∩ü¼ Extracted text is available.
+
+=== PDF PAGE 34 ===
+University of Education, Lahore
+QueryBot
+20
+Main Success Scenario:
+∩ü¼ User opens a document.
+∩ü¼ User selects ΓÇ£Generate Summary.ΓÇ¥
+∩ü¼ System retrieves high-value context chunks.
+∩ü¼ System prepares summary prompt.
+∩ü¼ System generates summary through LLM.
+∩ü¼ System returns summary to user.
+Alternative Scenario:
+∩ü¼ Document not found -> system shows not-found message.
+∩ü¼ No extractable text -> system returns ΓÇ£No text available to summarize.ΓÇ¥
+∩ü¼ LLM failure -> system returns temporary error notice.
+Postcondition:
+Summary is visible and available for export workflow.
+UC Number: UC_QB_07
+UC Name: Query Multiple Documents
+Primary Actor: User
+Secondary Actor: System (Session Service, RAG Service, Vector Store, LLM
+Service)
+Description: User asks one question across multiple selected documents for cross-file
+insight.
+Preconditions:
+∩ü¼ User is authenticated.
+∩ü¼ Two or more user-owned documents are selected.
+Main Success Scenario:
+∩ü¼ User selects multiple documents.
+∩ü¼ User submits a query.
+∩ü¼ System validates all document IDs and ownership.
+∩ü¼ System retrieves context across selected files.
+∩ü¼ System generates unified response from combined evidence.
+∩ü¼ System returns answer with multi-source references.
+∩ü¼ System stores interaction in session history.
+Alternative Scenario:
+∩ü¼ Any selected document not owned/found -> request rejected.
+∩ü¼ No meaningful context across selected docs -> system returns no-match response.
+Postcondition:
+Multi-document answer is displayed and persisted in chat history.
+
+=== PDF PAGE 35 ===
+University of Education, Lahore
+QueryBot
+21
+UC Number: UC_QB_08
+UC Name: View Citations/References
+Primary Actor: User
+Secondary Actor: System (RAG Service, Metadata Mapper)
+Description: User inspects references attached to assistant responses for verification.
+Preconditions:
+∩ü¼ User is authenticated.
+∩ü¼ Assistant response with source metadata exists.
+Main Success Scenario:
+∩ü¼ User opens citations for a response.
+∩ü¼ System fetches source list attached to the message.
+∩ü¼ System displays chunk index, page number, and file mapping.
+∩ü¼ User verifies response evidence from cited context.
+Alternative Scenario:
+No source metadata available -> system shows ΓÇ£No citations available for this
+response.ΓÇ¥
+Postcondition:
+User can validate answer trustworthiness using source references.
+UC Number: UC_QB_09
+UC Name: Manage Chat History
+Primary Actor: User
+Secondary Actor: System (Chat Session Service, Database)
+Description: User manages conversation history, including list, view, rename, edit,
+and delete operations.
+Preconditions:
+∩ü¼ User is authenticated.
+∩ü¼ At least one chat session/message exists for management actions.
+Main Success Scenario:
+∩ü¼ User opens chat history.
+∩ü¼ System lists user sessions in reverse chronological order.
+∩ü¼ User opens a session to view messages.
+∩ü¼ User may rename a session.
+∩ü¼ User may edit a previous user message.
+∩ü¼ System regenerates assistant response for edited message context.
+∩ü¼ User may delete a session when no longer required.
+Alternative Scenario:
+∩ü¼ Session/message not found -> system returns not-found error.
+∩ü¼ Edit attempted on assistant message -> system blocks operation.
+∩ü¼ Unauthorized session access -> system denies request.
+Postcondition:
+Chat history reflects userΓÇÖs requested updates consistently.
+
+=== PDF PAGE 36 ===
+University of Education, Lahore
+QueryBot
+22
+Figure 3.1: User Use Case
+
+=== PDF PAGE 37 ===
+University of Education, Lahore
+QueryBot
+23
+CHAPTER 04
+DESIGN
+
+=== PDF PAGE 38 ===
+University of Education, Lahore
+QueryBot
+24
+4.1 Architecture Diagram
+4.1.1 Introduction
+QueryBot is designed using a three-tier architecture that separates presentation,
+application logic, and data management. This structure improves maintainability,
+supports future scalability, and keeps responsibilities clearly divided across system
+components.
+∩ü¼ Presentation Tier: User-facing web interface for authentication, document
+handling, and conversational interaction.
+∩ü¼ Application Tier: Backend services that execute authentication, document
+processing, retrieval, and response generation workflows.
+∩ü¼ Data Tier: Persistent and semantic storage for transactional records and
+vectorized document knowledge.
+4.1.2 Component Breakdown
+1. Frontend (Presentation Layer)
+i. Technology: Next.js (React) with Tailwind CSS
+ii. Responsibilities: User registration/login screens, document upload workflows,
+chat interface, citation visibility, summary and export actions.
+2. Backend API (Application Layer)
+i. Technology: FastAPI (Python)
+ii. Responsibilities: API endpoint handling, JWT-based authorization, document
+parsing and preprocessing, chunking/indexing pipeline, retrieval orchestration,
+LLM request handling, citation mapping, and chat/session management.
+3. Data Layer (Persistence + Retrieval)
+i. SQLite: Stores user records, authentication-linked entities, sessions, chat
+messages, and operational metadata.
+ii. ChromaDB: Stores embeddings and chunk metadata for semantic retrieval and
+relevance matching.
+4. AI Services
+i. LangChain: Coordinates retrieval and prompt orchestration within the RAG
+pipeline.
+ii. Groq (LLM endpoint): Produces context-aware answers and summaries from
+retrieved evidence.
+
+=== PDF PAGE 39 ===
+University of Education, Lahore
+QueryBot
+25
+Figure 4.1: Architecture Diagram
+
+=== PDF PAGE 40 ===
+University of Education, Lahore
+QueryBot
+26
+4.2 ENTITY RELATIONSHIP DIAGRAM (ERD)
+4.2.1 Entities and Attributes
+i. Entity: users
+∩ü¼ user_id: Unique user identifier (Primary Key, UUID)
+∩ü¼ email: User email (Unique)
+∩ü¼ hashed_password: Password hash for authentication
+∩ü¼ created_at: Account creation timestamp
+ii. Entity: documents
+∩ü¼ document_id: Unique document identifier (Primary Key, UUID)
+∩ü¼ user_id: Owner user ID (Foreign Key ΓåÆ users.user_id)
+∩ü¼ original_filename: Original uploaded file name
+∩ü¼ stored_path: Server storage path of uploaded file
+∩ü¼ mime_type: File MIME type (for example application/pdf)
+∩ü¼ size_bytes: File size in bytes
+∩ü¼ extracted_text: Parsed textual content
+∩ü¼ created_at: Upload timestamp
+iii. Entity: chat_sessions
+∩ü¼ session_id: Unique session identifier (Primary Key, UUID)
+∩ü¼ user_id: Session owner ID (Foreign Key ΓåÆ users.user_id)
+∩ü¼ title: Chat session title
+∩ü¼ created_at: Session creation timestamp
+iv. Entity: chat_session_documents (Junction Table)
+∩ü¼ session_id: Session ID (Foreign Key ΓåÆ chat_sessions.session_id, part of
+composite Primary Key)
+∩ü¼ document_id: Document ID (Foreign Key ΓåÆ documents.document_id, part of
+composite Primary Key)
+v. Entity: messages
+∩ü¼ message_id: Unique message identifier (Primary Key, UUID)
+∩ü¼ session_id: Related chat session ID (Foreign Key ΓåÆ chat_sessions.session_id)
+∩ü¼ role: Message role (user / assistant)
+∩ü¼ content: Message text
+∩ü¼ created_at: Message timestamp
+
+=== PDF PAGE 41 ===
+University of Education, Lahore
+QueryBot
+27
+vi. Entity: bookmarks
+∩ü¼ bookmark_id: Unique bookmark identifier (Primary Key, UUID)
+∩ü¼ user_id: Bookmark owner ID (Foreign Key ΓåÆ users.user_id)
+∩ü¼ message_id: Referenced message ID (Foreign Key ΓåÆ messages.message_id)
+∩ü¼ snippet: Saved excerpt/snippet
+∩ü¼ created_at: Bookmark creation timestamp
+∩ü¼ Constraint: Unique pair (user_id, message_id)
+4.2.2 Relationships
+1. Users ΓåÆ Documents:
+One user can upload many documents; each document belongs to one user.
+documents.user_id ΓåÆ users.user_id
+2. Users ΓåÆ Chat_sessions:
+One user can have many chat sessions; each session belongs to one user.
+chat_sessions.user_id ΓåÆ users.user_id
+3. Chat_sessions Γåö Documents (many-to-many):
+Implemented through chat_session_documents.
+chat_session_documents.session_id ΓåÆ chat_sessions.session_id
+chat_session_documents.document_id ΓåÆ documents.document_id
+4. Chat_sessions ΓåÆ Messages:
+One chat session can contain many messages; each message belongs to one
+session.
+messages.session_id ΓåÆ chat_sessions.session_id
+5. Users ΓåÆ Bookmarks:
+One user can create many bookmarks; each bookmark belongs to one user.
+bookmarks.user_id ΓåÆ users.user_id
+6. Messages ΓåÆ Bookmarks:
+One message can be referenced by many bookmarks (from different users); each
+bookmark points to one message.
+bookmarks.message_id ΓåÆ messages.message_id
+
+=== PDF PAGE 42 ===
+University of Education, Lahore
+QueryBot
+28
+Figure 4.2: Entity Relationship Diagram
+
