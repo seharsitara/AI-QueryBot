@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { cn } from "@/lib/utils";
 import { AuthToasts } from "../auth-toasts";
 import { SubmitButton } from "../submit-button";
 import { AuthLabel, authInputClass } from "../auth-ui";
@@ -14,6 +15,7 @@ export default async function LoginPage({
   searchParams: SearchParams;
 }) {
   const { error, signedUp } = await searchParams;
+  const emailError = Boolean(error?.toLowerCase().includes("email"));
 
   return (
     <div className="w-full max-w-md rounded-2xl bg-white p-8 shadow-lg shadow-slate-200/50 sm:p-10">
@@ -30,7 +32,7 @@ export default async function LoginPage({
         </p>
       </div>
 
-      <form action={signIn} className="space-y-5">
+      <form action={signIn} className="space-y-5" noValidate>
         <div className="space-y-2">
           <AuthLabel htmlFor="email">Email Address</AuthLabel>
           <input
@@ -40,8 +42,19 @@ export default async function LoginPage({
             autoComplete="email"
             placeholder="name@company.com"
             required
-            className={authInputClass}
+            className={cn(
+              authInputClass,
+              emailError &&
+                "border-red-300 bg-white focus-visible:ring-red-200"
+            )}
+            aria-invalid={emailError ? "true" : undefined}
+            aria-describedby={emailError ? "email-error" : undefined}
           />
+          {emailError && (
+            <p id="email-error" className="text-sm text-red-600">
+              {error}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -59,7 +72,7 @@ export default async function LoginPage({
             before signing in.
           </p>
         )}
-        {error && (
+        {!emailError && error && (
           <p className="text-sm text-red-600" role="alert">
             {error}
           </p>
