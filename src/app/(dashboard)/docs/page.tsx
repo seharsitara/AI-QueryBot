@@ -1,9 +1,13 @@
+import { Suspense } from "react";
 import { listDocsPage } from "@/repositories/docs";
 import { requireUser } from "@/lib/auth/get-user";
 import { DocsTable } from "@/components/docs/docs-table";
 import { UploadZone } from "@/components/docs/upload-zone";
 import { RefreshButton } from "@/components/docs/refresh-button";
-import { DocsSearch } from "@/components/docs/docs-search";
+import {
+  DocsSearchPanel,
+  DocsSearchPanelSkeleton,
+} from "@/components/docs/docs-search-panel";
 import { DocsPagination } from "@/components/docs/docs-pagination";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +30,8 @@ export default async function DocsPage({
     pageSize: PAGE_SIZE,
   });
 
+  const hasSearch = Boolean(q?.trim());
+
   return (
     <div className="h-full overflow-y-auto bg-[#f8fafc]">
       <div className="mx-auto w-full max-w-6xl px-6 py-8">
@@ -35,14 +41,17 @@ export default async function DocsPage({
               Documents
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Upload PDF, Word, and text files. Track processing status in the
-              table below.
+              Upload files, search your library, and track processing status.
             </p>
           </div>
           <RefreshButton />
         </div>
 
         <div className="space-y-6">
+          <Suspense fallback={<DocsSearchPanelSkeleton />}>
+            <DocsSearchPanel />
+          </Suspense>
+
           <UploadZone />
 
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -53,27 +62,32 @@ export default async function DocsPage({
                 </h2>
                 <p className="text-xs text-slate-500">
                   {total === 0
-                    ? "No files uploaded yet"
-                    : `${total} document${total === 1 ? "" : "s"} in your library`}
+                    ? hasSearch
+                      ? "No documents match your search"
+                      : "No files uploaded yet"
+                    : `${total} document${total === 1 ? "" : "s"}${q ? ` matching "${q}"` : ""}`}
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <DocsSearch />
-                <DocsPagination
-                  page={pageNum}
-                  pageSize={PAGE_SIZE}
-                  total={total}
-                />
-              </div>
+              <DocsPagination
+                page={pageNum}
+                pageSize={PAGE_SIZE}
+                total={total}
+              />
             </div>
 
             <div className="p-4 sm:p-5">
-              {docs.length === 0 && q ? (
-                <div className="rounded-xl border border-dashed border-slate-200 py-12 text-center text-sm text-slate-500">
-                  No documents match &ldquo;{q}&rdquo;.
+              {docs.length === 0 && hasSearch ? (
+                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-14 text-center">
+                  <p className="text-sm font-medium text-[#0f2d52]">
+                    No matching documents
+                  </p>
+                  <p className="mt-1 max-w-sm text-xs text-slate-500">
+                    Nothing found for &ldquo;{q}&rdquo;. Try a different file
+                    name or clear the search above.
+                  </p>
                 </div>
               ) : (
-                <DocsTable docs={docs} />
+                <DocsTable docs={docs} searchQuery={q} />
               )}
             </div>
           </section>

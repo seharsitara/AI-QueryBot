@@ -12,7 +12,15 @@ import { useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import Link from "next/link";
-import { Send, FileWarning, MessageSquare, Layers } from "lucide-react";
+import {
+  Send,
+  FileWarning,
+  MessageSquare,
+  Layers,
+  PanelRightClose,
+  PanelRightOpen,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -22,7 +30,7 @@ import {
 } from "@/components/ui/resizable";
 import { MessageBubble } from "./message-bubble";
 import { DocSelector } from "./doc-selector";
-import { MultiDocPanel } from "./multi-doc-panel";
+import { MultiDocSelector } from "./multi-doc-selector";
 import { PreviewPane } from "./preview-pane";
 import { ChunkModal } from "./chunk-modal";
 import { updateThreadSelectedDocsAction } from "@/app/(dashboard)/chat/actions";
@@ -76,6 +84,13 @@ export function ChatWindow({
   const [activeChunk, setActiveChunk] = useState<RetrievedChunkForUi | null>(
     null,
   );
+  const [showPreview, setShowPreview] = useState(!isMulti);
+
+  const selectedDocs = useMemo(() => {
+    if (!isMulti) return [];
+    const set = new Set(selectedDocIds);
+    return completedDocs.filter((d) => set.has(d.id));
+  }, [completedDocs, isMulti, selectedDocIds]);
 
   const threadIdRef = useRef<string | null>(threadId);
 
@@ -122,6 +137,7 @@ export function ChatWindow({
   function handleSourceOpen(chunk: RetrievedChunkForUi) {
     setPreviewDocId(chunk.doc_id);
     setActiveChunk(chunk);
+    setShowPreview(true);
   }
 
   useEffect(() => {
@@ -178,38 +194,20 @@ export function ChatWindow({
   const placeholder = !hasCompletedDocs
     ? "Upload documents first..."
     : isMulti && selectedDocIds.length === 0
-      ? "Select documents on the left..."
+      ? "Select documents above to start..."
       : "Ask a question about your documents...";
 
   return (
     <div className="flex h-full flex-col bg-[#f8fafc]">
       <div className="min-h-0 flex-1">
         <ResizablePanelGroup direction="horizontal" className="h-full">
-          {isMulti && (
-            <>
-              <ResizablePanel
-                defaultSize={22}
-                minSize={18}
-                maxSize={32}
-                className="min-w-0"
-              >
-                <MultiDocPanel
-                  docs={completedDocs}
-                  selectedIds={selectedDocIds}
-                  onChange={handleSelectionChange}
-                  disabled={isBusy}
-                />
-              </ResizablePanel>
-              <ResizableHandle withHandle className="bg-slate-200" />
-            </>
-          )}
-
           <ResizablePanel
-            defaultSize={isMulti ? 40 : 58}
-            minSize={32}
+            defaultSize={showPreview ? (isMulti ? 62 : 58) : 100}
+            minSize={showPreview ? 40 : 100}
             className="flex min-w-0 flex-col"
           >
-            <header className="flex h-12 shrink-0 items-center gap-2 border-b border-slate-200 bg-white px-4">
+            <header className="shrink-0 border-b border-slate-200 bg-white">
+              <div className="flex h-12 items-center gap-2 px-4">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0f2d52]">
                 {isMulti ? (
                   <Layers className="h-4 w-4 text-white" />
@@ -217,18 +215,70 @@ export function ChatWindow({
                   <MessageSquare className="h-4 w-4 text-white" />
                 )}
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-[#0f2d52]">
                   {isMulti ? "Multi-Doc Chat" : "Chat"}
                 </p>
-                <p className="text-[10px] text-slate-500">
+                <p className="truncate text-[10px] text-slate-500">
                   {isMulti
                     ? selectedDocIds.length > 0
                       ? `Scoped to ${selectedDocIds.length} document${selectedDocIds.length === 1 ? "" : "s"}`
-                      : "Pick documents on the left"
+                      : "Choose documents to query together"
                     : "Ask questions about your documents"}
                 </p>
               </div>
+              {isMulti && (
+                <MultiDocSelector
+                  docs={completedDocs}
+                  selectedIds={selectedDocIds}
+                  onChange={handleSelectionChange}
+                  disabled={isBusy}
+                />
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 border-slate-200 text-xs text-[#0f2d52]"
+                onClick={() => setShowPreview((v) => !v)}
+                aria-pressed={showPreview}
+                aria-label={showPreview ? "Hide preview" : "Show preview"}
+              >
+                {showPreview ? (
+                  <PanelRightClose className="h-3.5 w-3.5" />
+                ) : (
+                  <PanelRightOpen className="h-3.5 w-3.5" />
+                )}
+                Preview
+              </Button>
+              </div>
+
+              {isMulti && selectedDocs.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-100 bg-slate-50/60 px-4 py-2">
+                  {selectedDocs.map((d) => (
+                    <span
+                      key={d.id}
+                      className="inline-flex max-w-[200px] items-center gap-1 rounded-full border border-[#0f2d52]/15 bg-white px-2.5 py-0.5 text-[11px] font-medium text-[#0f2d52]"
+                      title={d.file_name}
+                    >
+                      <span className="truncate">{d.file_name}</span>
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-full p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        aria-label={`Remove ${d.file_name}`}
+                        disabled={isBusy}
+                        onClick={() =>
+                          handleSelectionChange(
+                            selectedDocIds.filter((id) => id !== d.id),
+                          )
+                        }
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </header>
 
             <div
@@ -284,7 +334,7 @@ export function ChatWindow({
 
                 {isMulti && hasCompletedDocs && selectedDocIds.length === 0 && (
                   <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs text-amber-900">
-                    Select at least one document on the left to send a message.
+                    Select at least one document to send a message.
                   </p>
                 )}
 
@@ -329,19 +379,22 @@ export function ChatWindow({
             </div>
           </ResizablePanel>
 
-          <ResizableHandle withHandle className="bg-slate-200" />
-
-          <ResizablePanel
-            defaultSize={42}
-            minSize={28}
-            className="min-w-0 bg-white"
-          >
-            <PreviewPane
-              docs={previewDocs}
-              activeDocId={previewDocId}
-              onActiveDocChange={setPreviewDocId}
-            />
-          </ResizablePanel>
+          {showPreview && (
+            <>
+              <ResizableHandle withHandle className="bg-slate-200" />
+              <ResizablePanel
+                defaultSize={isMulti ? 38 : 42}
+                minSize={24}
+                className="min-w-0 bg-white"
+              >
+                <PreviewPane
+                  docs={previewDocs}
+                  activeDocId={previewDocId}
+                  onActiveDocChange={setPreviewDocId}
+                />
+              </ResizablePanel>
+            </>
+          )}
         </ResizablePanelGroup>
       </div>
 
@@ -389,9 +442,9 @@ function EmptyChatPrompt({
         {!hasCompletedDocs
           ? "Upload documents first, then start chatting with your knowledge base."
           : isMulti && !hasSelection
-            ? "Select one or more documents on the left, then ask questions scoped to those files only."
+            ? "Use the document picker above to choose files, then ask questions scoped to those documents only."
             : isMulti
-              ? "Ask questions across your selected documents. Sources appear under each answer; preview on the right."
+              ? "Ask questions across your selected documents. Open preview when you need to read source files."
               : "Ask anything about your uploaded documents. Sources appear under each answer; preview files on the right."}
       </p>
     </div>

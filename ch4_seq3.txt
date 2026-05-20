@@ -1,0 +1,216 @@
+﻿PAGE 10 - 4 hits
+PAGE 11 - 1 hits
+PAGE 50 - 5 hits
+PAGE 51 - 4 hits
+PAGE 52 - 4 hits
+PAGE 53 - 4 hits
+=== 46 ===
+University of Education, Lahore
+QueryBot
+32
+Figure 4.3.2: Level 1 Data Flow Diagram
+=== 47 ===
+University of Education, Lahore
+QueryBot
+33
+4.4 CLASS DIAGRAM
+4.4.1 Introduction
+The Class Diagram defines the static structural model of QueryBot by identifying the
+core classes, their major attributes, and the relationships among them. It reflects both
+domain entities (stored application data) and service-layer classes (workflow and
+processing logic). This model is fully aligned with the implemented Next.js frontend
+and FastAPI backend architecture.
+4.4.2 Core Domain Classes
+The core domain model is composed of six primary classes that represent the
+persistent data of the application:
+i. User: Represents a registered account. It stores id, email, hashed_password, and
+created_at. A user can own multiple documents, chat sessions, and bookmarks.
+ii. Document: Represents an uploaded file and its processed content. It stores id,
+user_id, original_filename, stored_path, mime_type, size_bytes, extracted_text,
+and created_at. Each document belongs to exactly one user.
+iii. ChatSession: Represents a user-specific conversation container. It stores id,
+user_id, title, and created_at. Each chat session belongs to one user and acts as a
+container for multiple messages.
+iv. Message: Represents an individual chat entry within a session. It stores id,
+session_id, role (user/assistant), content, and created_at. Every message is linked
+to a specific chat session.
+v. Bookmark: Represents a saved reference to a message for a user. It stores id,
+user_id, message_id, snippet, and created_at. A uniqueness constraint on (user_id,
+message_id) prevents duplicate bookmarks.
+vi. ChatSessionDocument: Represents the associative (junction) class for many-to-
+many mapping between chat sessions and documents. It stores session_id and
+document_id.
+4.4.3 Service Classes
+Service-level classes encapsulate the business logic and process orchestration of the
+system:
+i. AuthService: Handles user registration, login verification, and JWT token
+creation.
+ii. DocumentService: Manages file upload validation, text extraction flow, preview
+generation support, and indexing trigger operations.
+iii. RagService: Handles retrieval-augmented generation logic, including indexing,
+semantic retrieval, context building, and LLM-based answer/summary generation.
+iv. ChatService: Manages chat session creation, message handling, message
+=== 48 ===
+University of Education, Lahore
+QueryBot
+34
+editing/regeneration flow, and persistent chat history management.
+4.4.4 Relationship Overview
+The structural integrity of QueryBot is maintained through the following key
+relationships:
+i. One-to-Many (1:N): One User can own many Document records and many
+ChatSession records. Similarly, one ChatSession can contain many Message
+records.
+ii. Many-to-Many (M:N): ChatSession and Document share a many-to-many
+relationship, managed via the ChatSessionDocument junction class.
+iii. Referential: One User can create many Bookmark records, and one Message can
+be referenced by many bookmarks.
+iv. Dependency: Service classes maintain dependency links with domain classes to
+execute authentication, retrieval, processing, and persistence workflows.
+4.4.5 Storage
+Relational domain entities are managed in the SQL database layer (SQLite for local
+development; PostgreSQL for production-oriented architecture). ChromaDB is utilized
+specifically as a vector store for embeddings and semantic retrieval context, rather
+than as the primary relational store for domain entities.
+4.4.6 Conclusion
+The Class Diagram reflects a modular and maintainable system design. The separation
+of domain entities from service-level orchestration improves architectural clarity,
+extensibility, and maintainability. The presented model accurately represents the
+current project scope and technical implementation.
+=== 49 ===
+University of Education, Lahore
+QueryBot
+35
+Figure 4.4: Class Diagram
+=== 50 ===
+University of Education, Lahore
+QueryBot
+36
+4.5 Sequence Diagram
+4.5.1 User Registration and Login Sequence
+Purpose: To create a user account and authenticate access using JWT.
+Actors / Components:User, Frontend (Next.js), Auth API (FastAPI), Security/Auth ,
+Logic, SQL Database
+Sequence Steps:
+1. User enters email and password for registration.
+2. Frontend sends POST /auth/register request.
+3. Auth API checks whether email already exists in SQL Database.
+4. If email is new, password is hashed and user record is saved.
+5. User enters email and password for login.
+6. Frontend sends POST /auth/login request.
+7. Auth API verifies credentials against stored hash.
+8. API returns JWT access token to Frontend.
+9. Frontend stores token and grants access to protected flows.
+Figure 4.5.1: Sequence diagram for User Registration and Login Sequence
+=== 51 ===
+University of Education, Lahore
+QueryBot
+37
+4.5.2. Document Upload and Processing Sequence
+Purpose: To upload a supported file and prepare it for retrieval.
+Actors / Components:
+∩ü¼ User
+∩ü¼ Frontend (Next.js)
+∩ü¼ Documents API (FastAPI)
+∩ü¼ Document Parser/Processor
+∩ü¼ RAG Service
+∩ü¼ SQL Database
+∩ü¼ ChromaDB
+Sequence Steps:
+∩ü¼ User uploads a file (PDF, DOCX, or TXT).
+∩ü¼ Frontend sends POST /documents/upload with auth token.
+∩ü¼ API validates file type and size.
+∩ü¼ File is stored and text is extracted by parser logic.
+∩ü¼ Document metadata + extracted text are saved in SQL Database.
+∩ü¼ RAG Service is invoked to chunk and index document content.
+∩ü¼ Embeddings/chunks are stored in ChromaDB.
+∩ü¼ API returns upload success and document details to Frontend.
+Figure 4.5.2: Sequence diagram for Document Upload and Processing Sequence
+=== 52 ===
+University of Education, Lahore
+QueryBot
+38
+4.5.3. Query Processing Sequence (RAG + LLM)
+Purpose: To answer a user query using semantic retrieval and LLM generation.
+Actors / Components:
+∩ü¼ User
+∩ü¼ Frontend (Next.js)
+∩ü¼ Chat API (FastAPI)
+∩ü¼ Chat Orchestration Logic
+∩ü¼ RAG Service
+∩ü¼ ChromaDB
+∩ü¼ LLM Service (Groq via LangChain-compatible client)
+∩ü¼ SQL Database
+Sequence Steps:
+∩ü¼ User submits a natural-language question with selected document scope.
+∩ü¼ Frontend sends POST /chat/messages with auth token.
+∩ü¼ Chat API validates session/document ownership.
+∩ü¼ User message is staged/persisted in SQL Database.
+∩ü¼ RAG Service retrieves relevant chunks from ChromaDB.
+∩ü¼ RAG Service builds augmented prompt (question + context).
+∩ü¼ Prompt is sent to LLM service and response is received.
+∩ü¼ Assistant response is saved in SQL Database.
+∩ü¼ API returns assistant message plus assistant_sources (citations).
+∩ü¼ Frontend displays answer and source references.
+Figure 4.5.3: Sequence diagram for Query Processing Sequence (RAG + LLM)
+=== 53 ===
+University of Education, Lahore
+QueryBot
+39
+4.5.4. Document Summary Generation Sequence
+Purpose: To generate a contextual summary for a selected document.
+Actors / Components:
+∩ü¼ User
+∩ü¼ Frontend (Next.js)
+∩ü¼ Documents API (FastAPI)
+∩ü¼ RAG Service
+∩ü¼ ChromaDB
+∩ü¼ LLM Service
+Sequence Steps:
+∩ü¼ User requests summary for a document.
+∩ü¼ Frontend sends POST /documents/{document_id}/summary.
+∩ü¼ API validates that document belongs to authenticated user.
+∩ü¼ RAG Service retrieves summary-relevant chunks from ChromaDB.
+∩ü¼ RAG Service creates summary prompt and calls LLM service.
+∩ü¼ LLM returns summary text.
+∩ü¼ API returns summary payload to Frontend.
+∩ü¼ Frontend displays summary to user.
+Figure 4.5.4: Sequence diagram for Document Summary Generation Sequence
+=== 54 ===
+University of Education, Lahore
+QueryBot
+40
+CHAPTER 05
+GRAPHICAL USER INTERFACES
+=== 55 ===
+University of Education, Lahore
+QueryBot
+41
+5.1 Introduction
+Chapter 5 presents the Graphical User Interface (GUI) of QueryBot and demonstrates
+how users interact with the system modules implemented in previous chapters. The
+interface is designed to support an end-to-end workflow, starting from secure
+authentication and continuing to document upload, AI-powered querying, summary
+generation, and history-based interaction. This chapter focuses on real implemented
+screens, validation behavior, navigation flow, and output presentation to show the
+practical usability of the system.
+5.2 Overall Interface Structure
+QueryBot follows a web-based interface architecture implemented with Next.js and
+Tailwind CSS. The interface is organized around task-focused screens that guide the
+user through authentication, document ingestion, and AI interaction. Navigation is
+designed to be straightforward, with clear transitions between login/register,
+document management, chat interaction, summary generation, and bookmark/history
+views.
+The overall structure prioritizes usability and readability by using consistent visual
+components, validation feedback near input fields, and action-oriented controls. Since
+the current project scope includes only end-user functionality, the interface does not
+include any administrative dashboard.
+5.3 Core Interface Screens
+5.3.1 Login Screen
+The Login Screen serves as the primary entry point for existing users. It provides
+dedicated input fields for email and password, along with a password visibility toggle
+to improve usability. The interface includes real-time inline validation, where invalid
+email format and non-compliant password input are immediately shown below their
+respective fields. After successful credential verification, the system issues JWT-
+based authentication and redirects the user to the protected document workspace.
+

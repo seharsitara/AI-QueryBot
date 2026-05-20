@@ -16,9 +16,10 @@ import { FileText } from "lucide-react";
 
 interface Props {
   docs: Doc[];
+  searchQuery?: string;
 }
 
-export function DocsTable({ docs }: Props) {
+export function DocsTable({ docs, searchQuery }: Props) {
   if (docs.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 py-16 text-center">
@@ -55,13 +56,18 @@ export function DocsTable({ docs }: Props) {
         </TableHeader>
         <TableBody>
           {docs.map((doc) => (
-            <TableRow key={doc.id} className="hover:bg-slate-50/50">
+            <TableRow
+              key={doc.id}
+              id={`doc-row-${doc.id}`}
+              className="scroll-mt-24 hover:bg-slate-50/50"
+            >
               <TableCell className="max-w-xs font-medium">
                 <DocName
                   docId={doc.id}
                   fileName={doc.file_name}
                   status={doc.status}
                   chunksCount={doc.chunks_count}
+                  searchQuery={searchQuery}
                 />
                 {doc.status === "failed" && doc.error_message ? (
                   <p

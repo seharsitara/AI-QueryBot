@@ -18,6 +18,7 @@ import {
   getDocByFileName,
   deleteDocRow,
   findExistingDocNames,
+  searchDocsByName,
 } from "@/repositories/docs";
 import type { Doc } from "@/types/doc";
 import { deleteDocChunks, listDocChunks } from "@/lib/qdrant/search";
@@ -466,6 +467,24 @@ export async function generateDocSummaryAction(
       ok: false,
       error: "Could not generate summary. Please try again.",
     };
+  }
+}
+
+// ============================================================
+// searchDocsSuggestions
+// ------------------------------------------------------------
+// Live autocomplete for the documents search dropdown.
+// ============================================================
+export async function searchDocsSuggestionsAction(
+  q: string,
+): Promise<ActionResult<{ docs: Doc[]; total: number }>> {
+  await requireUser();
+  try {
+    const data = await searchDocsByName(q, 8);
+    return { ok: true, data };
+  } catch (err) {
+    console.error("[searchDocsSuggestions] failed", err);
+    return { ok: false, error: "Search failed" };
   }
 }
 
