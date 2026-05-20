@@ -18,8 +18,10 @@ import {
   getDocByFileName,
   deleteDocRow,
   findExistingDocNames,
+  listDocsPage,
   searchDocsByName,
 } from "@/repositories/docs";
+import type { DocsPage } from "@/repositories/docs";
 import type { Doc } from "@/types/doc";
 import { deleteDocChunks, listDocChunks } from "@/lib/qdrant/search";
 import { summarizeDocument } from "@/lib/rag/doc-summarizer";
@@ -467,6 +469,26 @@ export async function generateDocSummaryAction(
       ok: false,
       error: "Could not generate summary. Please try again.",
     };
+  }
+}
+
+// ============================================================
+// listDocsPageAction
+// ------------------------------------------------------------
+// Client-side table fetch (search + pagination) without URL params.
+// ============================================================
+export async function listDocsPageAction(params: {
+  q?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<ActionResult<DocsPage>> {
+  await requireUser();
+  try {
+    const data = await listDocsPage(params);
+    return { ok: true, data };
+  } catch (err) {
+    console.error("[listDocsPage] failed", err);
+    return { ok: false, error: "Could not load documents" };
   }
 }
 

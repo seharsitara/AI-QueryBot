@@ -27,7 +27,7 @@ export function UserMenu({ email }: UserMenuProps) {
   const initial = email.slice(0, 1).toUpperCase();
 
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <button className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted">
           <Avatar className="h-7 w-7">

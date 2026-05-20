@@ -26,7 +26,7 @@ export async function AppSidebar({ userEmail }: AppSidebarProps) {
       {/* Brand + New chat (outline so it reads as an action, not the
           currently-selected page — that's what SidebarNav shows) */}
       <div className="flex flex-col gap-3 p-3">
-        <Link href="/chat" className="px-2 text-sm font-semibold text-[#0f2d52]">
+        <Link href="/" className="px-2 text-sm font-semibold text-[#0f2d52]">
           QueryBot
         </Link>
         <Button

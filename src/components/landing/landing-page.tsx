@@ -73,7 +73,7 @@ const steps = [
 ];
 
 export function LandingPage({ user }: { user: User | null }) {
-  const dashboardHref = user ? "/chat" : "/login";
+  const dashboardHref = user ? "/docs" : "/login";
 
   return (
     <div className="min-h-screen bg-[#f8fafc]">
