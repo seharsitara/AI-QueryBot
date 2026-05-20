@@ -23,14 +23,14 @@ export function PasswordInput({
   minLength,
   placeholder = "••••••••",
 }: PasswordInputProps) {
-  const [visible, setVisible] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   return (
     <div className="relative">
       <input
         id={id}
         name={name}
-        type={visible ? "text" : "password"}
+        type={showPassword ? "text" : "password"}
         autoComplete={autoComplete}
         required={required}
         minLength={minLength}
@@ -39,14 +39,14 @@ export function PasswordInput({
       />
       <button
         type="button"
-        onClick={() => setVisible((v) => !v)}
+        onClick={() => setShowPassword((v) => !v)}
         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-        aria-label={visible ? "Hide password" : "Show password"}
+        aria-label={showPassword ? "Hide password" : "Show password"}
       >
-        {visible ? (
-          <EyeOff className="h-4 w-4" />
-        ) : (
+        {showPassword ? (
           <Eye className="h-4 w-4" />
+        ) : (
+          <EyeOff className="h-4 w-4" />
         )}
       </button>
     </div>

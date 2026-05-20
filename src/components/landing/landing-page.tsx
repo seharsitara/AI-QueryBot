@@ -82,7 +82,7 @@ export function LandingPage({ user }: { user: User | null }) {
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-blue-50/50 via-transparent to-transparent" />
-        <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:py-24">
+        <div className="relative mx-auto grid max-w-[90rem] items-center gap-12 px-3 py-16 sm:px-4 lg:px-5 lg:grid-cols-2 lg:py-24">
           <div>
             <span className="inline-flex rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-medium text-[#0f2d52]">
               Powered by GPT-4 and Claude 3
@@ -105,7 +105,7 @@ export function LandingPage({ user }: { user: User | null }) {
       </section>
 
       {/* Features */}
-      <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+      <section className="mx-auto max-w-[90rem] px-3 py-20 sm:px-4 lg:px-5">
         <div className="text-center">
           <h2 className={`text-3xl font-bold tracking-tight sm:text-4xl ${navy}`}>
             Precision Intelligence
@@ -139,7 +139,7 @@ export function LandingPage({ user }: { user: User | null }) {
       </section>
 
       {/* Workflow */}
-      <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+      <section className="mx-auto max-w-[90rem] px-3 py-20 sm:px-4 lg:px-5">
         <div className="grid items-center gap-12 lg:grid-cols-2">
           <div>
             <h2 className={`text-3xl font-bold tracking-tight sm:text-4xl ${navy}`}>
@@ -167,7 +167,7 @@ export function LandingPage({ user }: { user: User | null }) {
       </section>
 
       {/* Audience */}
-      <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+      <section className="mx-auto max-w-[90rem] px-3 py-20 sm:px-4 lg:px-5">
         <div className="text-center">
           <h2 className={`text-3xl font-bold tracking-tight sm:text-4xl ${navy}`}>
             Tailored for Every Workflow
@@ -241,7 +241,7 @@ export function LandingPage({ user }: { user: User | null }) {
       </section>
 
       {/* CTA */}
-      <section className="mx-auto max-w-6xl px-4 pb-20 sm:px-6">
+      <section className="mx-auto max-w-[90rem] px-3 pb-20 sm:px-4 lg:px-5">
         <div className="rounded-3xl bg-gradient-to-br from-[#0f2d52] to-[#1a3d6b] px-8 py-16 text-center shadow-xl shadow-[#0f2d52]/25 sm:px-16">
           <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
             Start using AI to explore your documents
@@ -261,7 +261,7 @@ export function LandingPage({ user }: { user: User | null }) {
 
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-slate-50">
-        <div className="mx-auto grid max-w-6xl gap-10 px-4 py-14 sm:grid-cols-2 sm:px-6 lg:grid-cols-4">
+        <div className="mx-auto grid max-w-[90rem] gap-10 px-3 py-14 sm:grid-cols-2 sm:px-4 lg:grid-cols-4 lg:px-5">
           <div>
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0f2d52]">

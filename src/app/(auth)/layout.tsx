@@ -8,7 +8,7 @@ export default function AuthLayout({
   return (
     <div className="min-h-screen bg-[#f8fafc]">
       <AuthNav />
-      <main className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-10">
+      <main className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-3 py-10 sm:px-4 lg:px-5">
         {children}
       </main>
     </div>

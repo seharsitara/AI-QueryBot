@@ -45,7 +45,7 @@ export async function signIn(formData: FormData) {
 
   // Refresh any cached server-rendered pages so they see the new session.
   revalidatePath("/", "layout");
-  redirect("/chat");
+  redirect("/docs");
 }
 
 // --- Sign up ----------------------------------------------------
@@ -60,15 +60,20 @@ export async function signUp(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signUp(parsed.data);
+  const { data, error } = await supabase.auth.signUp(parsed.data);
 
   if (error) {
     redirect(withError("/signup", error.message));
   }
 
-  // If email confirmation is enabled in Supabase, the user must
-  // verify before signing in. We bounce to /login with a flag so
-  // the page can show a "check your inbox" notice.
+  revalidatePath("/", "layout");
+
+  // Auto-confirm enabled: session exists — go straight to documents.
+  if (data.session) {
+    redirect("/docs");
+  }
+
+  // Email confirmation required — sign in after verifying.
   redirect("/login?signedUp=1");
 }
 

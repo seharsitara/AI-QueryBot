@@ -13,7 +13,7 @@ export function AuthNav() {
 
   return (
     <header className="border-b border-slate-200/80 bg-white">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+      <div className="mx-auto flex h-16 w-full max-w-[90rem] items-center justify-between px-3 sm:px-4 lg:px-5">
         <Link href="/login" className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0f2d52]">
             <Search className="h-4 w-4 text-white" strokeWidth={2.5} />
