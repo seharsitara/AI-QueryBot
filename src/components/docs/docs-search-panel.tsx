@@ -127,8 +127,8 @@ export function DocsSearchPanel() {
   const showDropdown = open && value.trim().length > 0;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-blue-50/30 px-5 py-4">
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-blue-50/30 px-5 py-4 rounded-t-2xl">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0f2d52]">
             <Search className="h-5 w-5 text-white" />
@@ -144,7 +144,7 @@ export function DocsSearchPanel() {
         </div>
       </div>
 
-      <div className="px-5 py-4" ref={containerRef}>
+      <div className="px-5 py-4 relative" ref={containerRef}>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
@@ -185,7 +185,7 @@ export function DocsSearchPanel() {
 
           {showDropdown && (
             <div
-              className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg"
+              className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 rounded-xl border border-slate-200 bg-white shadow-lg max-h-80 overflow-y-auto flex flex-col"
               role="listbox"
             >
               {loading && suggestions.length === 0 ? (
@@ -204,7 +204,15 @@ export function DocsSearchPanel() {
                 </div>
               ) : (
                 <>
-                  <ul className="max-h-64 overflow-y-auto p-1.5">
+                  <div className="border-b border-slate-100 bg-slate-50 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                      Results
+                    </p>
+                    <p className="text-sm font-semibold text-[#0f2d52]">
+                      {suggestions.length} found
+                    </p>
+                  </div>
+                  <ul className="overflow-y-auto p-2 flex-1">
                     {suggestions.map((doc) => (
                       <li key={doc.id}>
                         <button
@@ -213,18 +221,21 @@ export function DocsSearchPanel() {
                           onClick={() =>
                             applySearch(doc.file_name, doc.id)
                           }
-                          className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-slate-50"
+                          className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors hover:bg-slate-50"
                         >
-                          <FileText className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#0f2d52]/10">
+                            <FileText className="h-5 w-5 text-[#0f2d52]" />
+                          </div>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-medium text-[#0f2d52]">
                               {highlightMatch(doc.file_name, value)}
                             </span>
-                            <span className="mt-1 flex flex-wrap items-center gap-2">
-                              <StatusBadge status={doc.status} />
-                              <span className="text-[11px] text-slate-500">
-                                {formatBytes(doc.file_size)}
-                              </span>
+                            <span className="mt-1 text-xs text-slate-500">
+                              {formatBytes(doc.file_size)} • {new Date(doc.created_at).toLocaleDateString("en-US", {
+                                month: "2-digit",
+                                day: "2-digit",
+                                year: "numeric",
+                              })}
                             </span>
                           </span>
                         </button>
@@ -232,7 +243,7 @@ export function DocsSearchPanel() {
                     ))}
                   </ul>
                   {total > suggestions.length && (
-                    <div className="border-t border-slate-100 bg-slate-50/80 px-3 py-2">
+                    <div className="border-t border-slate-100 bg-slate-50/80 px-3 py-2 sticky bottom-0">
                       <button
                         type="button"
                         onClick={() => applySearch(value.trim())}
