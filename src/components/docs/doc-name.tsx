@@ -22,12 +22,14 @@ import {
   getDocChunks,
   type DocChunkView,
 } from "@/app/(dashboard)/docs/actions";
+import { highlightMatch } from "@/lib/utils/highlight-match";
 
 interface DocNameProps {
   docId: string;
   fileName: string;
   status: string;
   chunksCount: number;
+  searchQuery?: string;
 }
 
 export function DocName({
@@ -35,7 +37,9 @@ export function DocName({
   fileName,
   status,
   chunksCount,
+  searchQuery,
 }: DocNameProps) {
+  const displayName = highlightMatch(fileName, searchQuery ?? "");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [chunks, setChunks] = useState<DocChunkView[] | null>(null);
@@ -59,7 +63,7 @@ export function DocName({
       <div className="flex items-center gap-2">
         <FileText className="h-4 w-4 text-muted-foreground" aria-hidden />
         <span className="truncate" title={fileName}>
-          {fileName}
+          {displayName}
         </span>
       </div>
     );
@@ -74,7 +78,7 @@ export function DocName({
         title={`View chunks for ${fileName}`}
       >
         <FileText className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="truncate">{fileName}</span>
+        <span className="truncate">{displayName}</span>
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>

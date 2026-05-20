@@ -1,13 +1,5 @@
 "use client";
 
-// Manual refresh control. Uses Next.js's router.refresh() to
-// re-run the current route's Server Components (which re-query
-// the DB through listDocsForUser). No server action needed —
-// actions are reserved for mutations.
-//
-// We pair router.refresh with useTransition so the button can
-// show a pending state while React streams the new RSC payload.
-
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
@@ -31,6 +23,7 @@ export function RefreshButton() {
       size="sm"
       disabled={isPending}
       onClick={handleRefresh}
+      className="border-slate-200 text-[#0f2d52] hover:bg-slate-50"
     >
       <RefreshCw
         className={cn("h-4 w-4", isPending && "animate-spin")}

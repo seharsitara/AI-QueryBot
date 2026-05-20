@@ -1,75 +1,45 @@
-// ------------------------------------------------------------
-// /docs · upload + manage memory documents
-//
-// Server component. Reads `?q=` (file-name search) and `?page=`
-// from the URL and renders a paginated, searchable table. The
-// search/pagination controls are client islands that just push
-// new query params; this component re-fetches on each change.
-// ------------------------------------------------------------
-
 import { listDocsPage } from "@/repositories/docs";
 import { requireUser } from "@/lib/auth/get-user";
-import { DocsTable } from "@/components/docs/docs-table";
 import { UploadZone } from "@/components/docs/upload-zone";
 import { RefreshButton } from "@/components/docs/refresh-button";
-import { DocsSearch } from "@/components/docs/docs-search";
-import { DocsPagination } from "@/components/docs/docs-pagination";
+import { DocsLibrary } from "@/components/docs/docs-library";
 
 export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 10;
 
-export default async function DocsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ q?: string; page?: string }>;
-}) {
+export default async function DocsPage() {
   await requireUser();
 
-  const { q, page } = await searchParams;
-  const pageNum = Math.max(1, Number(page) || 1);
-
   const { docs, total } = await listDocsPage({
-    q,
-    page: pageNum,
+    page: 1,
     pageSize: PAGE_SIZE,
   });
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto w-full max-w-5xl px-6 py-8">
-        <div className="mb-6 flex items-start justify-between gap-4">
+    <div className="h-full overflow-y-auto bg-[#f8fafc]">
+      <div className="mx-auto w-full max-w-6xl px-6 py-8">
+        <div className="mb-8 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold">Documents</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Upload .pdf, .docx, and .txt files. Documents are processed in the
-              background — use Refresh to see the latest status.
+            <h1 className="text-2xl font-bold tracking-tight text-[#0f2d52]">
+              Documents
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Upload files, search your library, and track processing status.
             </p>
           </div>
           <RefreshButton />
         </div>
 
         <div className="space-y-6">
-          <UploadZone />
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-4">
-              <DocsSearch />
-              <DocsPagination
-                page={pageNum}
-                pageSize={PAGE_SIZE}
-                total={total}
-              />
-            </div>
-
-            {docs.length === 0 && q ? (
-              <div className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
-                No documents match “{q}”.
-              </div>
-            ) : (
-              <DocsTable docs={docs} />
-            )}
-          </div>
+          <DocsLibrary
+            initialDocs={docs}
+            initialTotal={total}
+            initialPage={1}
+            pageSize={PAGE_SIZE}
+          >
+            <UploadZone />
+          </DocsLibrary>
         </div>
       </div>
     </div>

@@ -1,23 +1,5 @@
 "use client";
 
-// ------------------------------------------------------------
-// The interactive chat surface. Drives Vercel AI SDK's useChat
-// hook against /api/chat, and hosts:
-//   • the per-thread document selector (composer toolbar)
-//   • a resizable right-side document preview pane
-//
-// State owned here (single source of truth, prop-drilled down):
-//   • selectedDocIds  — thread document scope
-//   • previewOpen / previewDocId / previewHighlight — preview pane
-//
-// Persistence:
-//   • Existing thread → selection changes saved via
-//     updateThreadSelectedDocsAction.
-//   • Brand-new thread → selection rides with the first /api/chat
-//     request (prepareSendMessagesRequest body) and the server
-//     seeds it onto the created thread.
-// ------------------------------------------------------------
-
 import {
   useEffect,
   useMemo,
@@ -29,9 +11,16 @@ import {
 import { useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import type { ImperativePanelHandle } from "react-resizable-panels";
 import Link from "next/link";
-import { Send, FileWarning, PanelRight } from "lucide-react";
+import {
+  Send,
+  FileWarning,
+  MessageSquare,
+  Layers,
+  PanelRightClose,
+  PanelRightOpen,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -39,22 +28,23 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
-import { cn } from "@/lib/utils";
 import { MessageBubble } from "./message-bubble";
 import { DocSelector } from "./doc-selector";
+import { MultiDocSelector } from "./multi-doc-selector";
 import { PreviewPane } from "./preview-pane";
 import { ChunkModal } from "./chunk-modal";
 import { updateThreadSelectedDocsAction } from "@/app/(dashboard)/chat/actions";
 import type { Doc } from "@/types/doc";
 import type { RetrievedChunkForUi } from "@/types/message";
 
+type ChatVariant = "default" | "multi";
+
 interface ChatWindowProps {
   threadId: string | null;
   initialMessages?: UIMessage[];
-  // Completed docs the user can scope to / preview.
   completedDocs: Doc[];
-  // Persisted thread scope (empty = all). Ignored for new chats.
   initialSelectedDocIds: string[];
+  variant?: ChatVariant;
 }
 
 export function ChatWindow({
@@ -62,37 +52,48 @@ export function ChatWindow({
   initialMessages,
   completedDocs,
   initialSelectedDocIds,
+  variant = "default",
 }: ChatWindowProps) {
+  const isMulti = variant === "multi";
+  const chatBasePath = isMulti ? "/chat/multi" : "/chat";
   const router = useRouter();
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const hasCompletedDocs = completedDocs.length > 0;
-
-  // --- Document scope ---
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>(
     initialSelectedDocIds,
   );
   const selectedIdsRef = useRef<string[]>(initialSelectedDocIds);
   const [, startSaveScope] = useTransition();
 
-  // --- Preview pane ---
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewDocId, setPreviewDocId] = useState<string | null>(null);
-  const previewPanelRef = useRef<ImperativePanelHandle>(null);
+  const hasCompletedDocs = completedDocs.length > 0;
+  const hasScopedDocs = !isMulti || selectedDocIds.length > 0;
+  const canSend = hasCompletedDocs && hasScopedDocs;
 
-  // --- Retrieved-chunk modal ---
+  const previewDocs = useMemo(() => {
+    if (!isMulti || selectedDocIds.length === 0) return completedDocs;
+    const set = new Set(selectedDocIds);
+    return completedDocs.filter((d) => set.has(d.id));
+  }, [completedDocs, isMulti, selectedDocIds]);
+
+  const [previewDocId, setPreviewDocId] = useState<string | null>(() =>
+    previewDocs[0]?.id ?? completedDocs[0]?.id ?? null,
+  );
+
   const [activeChunk, setActiveChunk] = useState<RetrievedChunkForUi | null>(
     null,
   );
+  const [showPreview, setShowPreview] = useState(!isMulti);
 
-  // Track the latest threadId so we can navigate after the server
-  // creates a fresh one (kept in a ref to avoid rebuilding transport).
+  const selectedDocs = useMemo(() => {
+    if (!isMulti) return [];
+    const set = new Set(selectedDocIds);
+    return completedDocs.filter((d) => set.has(d.id));
+  }, [completedDocs, isMulti, selectedDocIds]);
+
   const threadIdRef = useRef<string | null>(threadId);
 
-  // Transport: body built per-request so we always send the latest
-  // threadId + document scope.
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
@@ -119,8 +120,6 @@ export function ChatWindow({
     status === "submitted" ||
     (status === "streaming" && (!lastMessage || lastMessage.role === "user"));
 
-  // Persist scope changes. Existing thread → server action; new
-  // thread → keep in state/ref, it ships with the first message.
   function handleSelectionChange(ids: string[]) {
     setSelectedDocIds(ids);
     selectedIdsRef.current = ids;
@@ -130,21 +129,22 @@ export function ChatWindow({
         await updateThreadSelectedDocsAction({ threadId: tid, docIds: ids });
       });
     }
+    if (ids.length > 0 && previewDocId && !ids.includes(previewDocId)) {
+      setPreviewDocId(ids[0]!);
+    }
   }
 
-  function changePreviewDoc(docId: string) {
-    setPreviewDocId(docId || null);
+  function handleSourceOpen(chunk: RetrievedChunkForUi) {
+    setPreviewDocId(chunk.doc_id);
+    setActiveChunk(chunk);
+    setShowPreview(true);
   }
 
-  // Sync the collapsible preview panel with previewOpen state.
   useEffect(() => {
-    const panel = previewPanelRef.current;
-    if (!panel) return;
-    if (previewOpen && panel.isCollapsed()) panel.expand();
-    if (!previewOpen && !panel.isCollapsed()) panel.collapse();
-  }, [previewOpen]);
+    if (previewDocId && previewDocs.some((d) => d.id === previewDocId)) return;
+    if (previewDocs.length > 0) setPreviewDocId(previewDocs[0]!.id);
+  }, [previewDocs, previewDocId]);
 
-  // Post-stream: a fresh thread's id arrives in a data-thread part.
   useEffect(() => {
     if (threadId) return;
     if (isBusy) return;
@@ -156,22 +156,20 @@ export function ChatWindow({
             ?.thread_id;
           if (newId && newId !== threadIdRef.current) {
             threadIdRef.current = newId;
-            router.replace(`/chat/${newId}`);
+            router.replace(`${chatBasePath}/${newId}`);
             router.refresh();
             return;
           }
         }
       }
     }
-  }, [messages, threadId, isBusy, router]);
+  }, [messages, threadId, isBusy, router, chatBasePath]);
 
-  // Auto-scroll conversation on new messages / streaming token.
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, isBusy]);
 
-  // Auto-resize the textarea up to ~6 lines.
   useEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -181,7 +179,7 @@ export function ChatWindow({
 
   function handleSend() {
     const trimmed = input.trim();
-    if (!trimmed || isBusy || !hasCompletedDocs) return;
+    if (!trimmed || isBusy || !canSend) return;
     sendMessage({ text: trimmed });
     setInput("");
   }
@@ -193,38 +191,107 @@ export function ChatWindow({
     }
   }
 
-  return (
-    <div className="flex h-full flex-col">
-      {/* Slim header: title + preview toggle */}
-      <header className="flex h-12 shrink-0 items-center justify-between border-b px-4">
-        <span className="text-sm font-medium">Chat</span>
-        <Button
-          type="button"
-          variant={previewOpen ? "secondary" : "ghost"}
-          size="sm"
-          onClick={() => setPreviewOpen((o) => !o)}
-          className="gap-1.5 text-xs"
-        >
-          <PanelRight className="h-3.5 w-3.5" />
-          Preview
-        </Button>
-      </header>
+  const placeholder = !hasCompletedDocs
+    ? "Upload documents first..."
+    : isMulti && selectedDocIds.length === 0
+      ? "Select documents above to start..."
+      : "Ask a question about your documents...";
 
+  return (
+    <div className="flex h-full flex-col bg-[#f8fafc]">
       <div className="min-h-0 flex-1">
         <ResizablePanelGroup direction="horizontal" className="h-full">
-          {/* Conversation + composer */}
           <ResizablePanel
-            defaultSize={62}
-            minSize={35}
+            defaultSize={showPreview ? (isMulti ? 62 : 58) : 100}
+            minSize={showPreview ? 40 : 100}
             className="flex min-w-0 flex-col"
           >
+            <header className="shrink-0 border-b border-slate-200 bg-white">
+              <div className="flex h-12 items-center gap-2 px-4">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0f2d52]">
+                {isMulti ? (
+                  <Layers className="h-4 w-4 text-white" />
+                ) : (
+                  <MessageSquare className="h-4 w-4 text-white" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-[#0f2d52]">
+                  {isMulti ? "Multi-Doc Chat" : "Chat"}
+                </p>
+                <p className="truncate text-[10px] text-slate-500">
+                  {isMulti
+                    ? selectedDocIds.length > 0
+                      ? `Scoped to ${selectedDocIds.length} document${selectedDocIds.length === 1 ? "" : "s"}`
+                      : "Choose documents to query together"
+                    : "Ask questions about your documents"}
+                </p>
+              </div>
+              {isMulti && (
+                <MultiDocSelector
+                  docs={completedDocs}
+                  selectedIds={selectedDocIds}
+                  onChange={handleSelectionChange}
+                  disabled={isBusy}
+                />
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 border-slate-200 text-xs text-[#0f2d52]"
+                onClick={() => setShowPreview((v) => !v)}
+                aria-pressed={showPreview}
+                aria-label={showPreview ? "Hide preview" : "Show preview"}
+              >
+                {showPreview ? (
+                  <PanelRightClose className="h-3.5 w-3.5" />
+                ) : (
+                  <PanelRightOpen className="h-3.5 w-3.5" />
+                )}
+                Preview
+              </Button>
+              </div>
+
+              {isMulti && selectedDocs.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-100 bg-slate-50/60 px-4 py-2">
+                  {selectedDocs.map((d) => (
+                    <span
+                      key={d.id}
+                      className="inline-flex max-w-[200px] items-center gap-1 rounded-full border border-[#0f2d52]/15 bg-white px-2.5 py-0.5 text-[11px] font-medium text-[#0f2d52]"
+                      title={d.file_name}
+                    >
+                      <span className="truncate">{d.file_name}</span>
+                      <button
+                        type="button"
+                        className="shrink-0 rounded-full p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        aria-label={`Remove ${d.file_name}`}
+                        disabled={isBusy}
+                        onClick={() =>
+                          handleSelectionChange(
+                            selectedDocIds.filter((id) => id !== d.id),
+                          )
+                        }
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </header>
+
             <div
               ref={scrollRef}
-              className="flex-1 overflow-y-auto px-4 py-6 sm:px-8"
+              className="flex-1 overflow-y-auto bg-[#f8fafc] px-4 py-6 sm:px-6"
             >
               <div className="mx-auto flex max-w-3xl flex-col gap-4">
                 {messages.length === 0 ? (
-                  <EmptyChatPrompt hasCompletedDocs={hasCompletedDocs} />
+                  <EmptyChatPrompt
+                    hasCompletedDocs={hasCompletedDocs}
+                    isMulti={isMulti}
+                    hasSelection={selectedDocIds.length > 0}
+                  />
                 ) : (
                   messages.map((m, i) => (
                     <MessageBubble
@@ -233,7 +300,7 @@ export function ChatWindow({
                       isStreaming={
                         status === "streaming" && i === messages.length - 1
                       }
-                      onShowChunk={setActiveChunk}
+                      onShowChunk={handleSourceOpen}
                     />
                   ))
                 )}
@@ -241,105 +308,93 @@ export function ChatWindow({
                 {isAwaitingFirstToken && <ThinkingBubble />}
 
                 {error && (
-                  <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                     {error.message}
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Composer */}
-            <div className="border-t bg-background px-4 py-3 sm:px-8">
+            <div className="border-t border-slate-200 bg-white px-4 py-3 sm:px-6">
               <div className="mx-auto flex max-w-3xl flex-col gap-2">
                 {!hasCompletedDocs && (
-                  <div className="flex items-start gap-2 rounded-md border bg-muted px-3 py-2 text-xs text-muted-foreground">
+                  <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                     <FileWarning className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     <span>
                       Upload some documents before chatting.{" "}
                       <Link
                         href="/docs"
-                        className="font-medium text-foreground underline-offset-2 hover:underline"
+                        className="font-medium underline-offset-2 hover:underline"
                       >
-                        Go to Documents →
+                        Go to Documents
                       </Link>
                     </span>
                   </div>
                 )}
 
-                <div className="relative flex items-end gap-2 rounded-lg border bg-background p-2 focus-within:border-foreground/40">
+                {isMulti && hasCompletedDocs && selectedDocIds.length === 0 && (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs text-amber-900">
+                    Select at least one document to send a message.
+                  </p>
+                )}
+
+                <div className="relative flex items-end gap-2 rounded-xl border border-slate-200 bg-slate-50/50 p-2 focus-within:border-[#0f2d52]/40 focus-within:ring-2 focus-within:ring-[#0f2d52]/10">
                   <Textarea
                     ref={textareaRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder={
-                      hasCompletedDocs
-                        ? "Ask a question about your documents…"
-                        : "Upload documents first…"
-                    }
+                    placeholder={placeholder}
                     rows={1}
-                    disabled={!hasCompletedDocs || isBusy}
-                    className="min-h-[40px] flex-1 resize-none border-0 bg-transparent p-2 text-sm focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!canSend || isBusy}
+                    className="min-h-[40px] flex-1 resize-none border-0 bg-transparent p-2 text-sm text-[#0f2d52] placeholder:text-slate-400 focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
                   />
-                  <DocSelector
-                    docs={completedDocs}
-                    selectedIds={selectedDocIds}
-                    onChange={handleSelectionChange}
-                    disabled={isBusy}
-                  />
+                  {!isMulti && (
+                    <DocSelector
+                      docs={completedDocs}
+                      selectedIds={selectedDocIds}
+                      onChange={handleSelectionChange}
+                      disabled={isBusy}
+                    />
+                  )}
                   <Button
                     type="button"
                     size="icon"
                     onClick={handleSend}
-                    disabled={!input.trim() || isBusy || !hasCompletedDocs}
-                    className="h-9 w-9 shrink-0"
+                    disabled={!input.trim() || isBusy || !canSend}
+                    className="h-9 w-9 shrink-0 bg-[#0f2d52] hover:bg-[#0c2442]"
                     aria-label="Send"
                   >
                     {isBusy ? (
-                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-background/40 border-t-background" />
+                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/40 border-t-white" />
                     ) : (
                       <Send className="h-4 w-4" />
                     )}
                   </Button>
                 </div>
-                <p className="text-center text-[10px] text-muted-foreground">
-                  Press{" "}
-                  <kbd className="rounded bg-muted px-1 py-0.5">Enter</kbd> to
-                  send,{" "}
-                  <kbd className="rounded bg-muted px-1 py-0.5">
-                    Shift + Enter
-                  </kbd>{" "}
-                  for a new line
+                <p className="text-center text-[10px] text-slate-400">
+                  Enter to send - Shift+Enter for new line
                 </p>
               </div>
             </div>
           </ResizablePanel>
 
-          {/* Handle — inert/invisible while preview is collapsed */}
-          <ResizableHandle
-            withHandle
-            className={cn(!previewOpen && "pointer-events-none opacity-0")}
-          />
-
-          {/* Preview pane (collapsible) */}
-          <ResizablePanel
-            ref={previewPanelRef}
-            collapsible
-            collapsedSize={0}
-            defaultSize={0}
-            minSize={26}
-            maxSize={60}
-            onExpand={() => setPreviewOpen(true)}
-            onCollapse={() => setPreviewOpen(false)}
-            className="min-w-0"
-          >
-            <PreviewPane
-              docs={completedDocs}
-              activeDocId={previewDocId}
-              onActiveDocChange={changePreviewDoc}
-              onClose={() => setPreviewOpen(false)}
-            />
-          </ResizablePanel>
+          {showPreview && (
+            <>
+              <ResizableHandle withHandle className="bg-slate-200" />
+              <ResizablePanel
+                defaultSize={isMulti ? 38 : 42}
+                minSize={24}
+                className="min-w-0 bg-white"
+              >
+                <PreviewPane
+                  docs={previewDocs}
+                  activeDocId={previewDocId}
+                  onActiveDocChange={setPreviewDocId}
+                />
+              </ResizablePanel>
+            </>
+          )}
         </ResizablePanelGroup>
       </div>
 
@@ -348,31 +403,49 @@ export function ChatWindow({
   );
 }
 
-// Animated three-dot bubble shown while awaiting the first token.
 function ThinkingBubble() {
   return (
     <div className="flex w-full justify-start">
       <div
         role="status"
         aria-label="Assistant is thinking"
-        className="flex max-w-[85%] items-center gap-1.5 rounded-lg bg-muted px-4 py-4"
+        className="flex max-w-[85%] items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm"
       >
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-foreground/60 [animation-delay:-0.3s]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-foreground/60 [animation-delay:-0.15s]" />
-        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-foreground/60" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#0f2d52]/60 [animation-delay:-0.3s]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#0f2d52]/60 [animation-delay:-0.15s]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#0f2d52]/60" />
       </div>
     </div>
   );
 }
 
-function EmptyChatPrompt({ hasCompletedDocs }: { hasCompletedDocs: boolean }) {
+function EmptyChatPrompt({
+  hasCompletedDocs,
+  isMulti,
+  hasSelection,
+}: {
+  hasCompletedDocs: boolean;
+  isMulti: boolean;
+  hasSelection: boolean;
+}) {
+  const Icon = isMulti ? Layers : MessageSquare;
+
   return (
-    <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
-      <h2 className="text-xl font-semibold">RAG Chatbot</h2>
-      <p className="mt-2 max-w-md text-sm text-muted-foreground">
-        {hasCompletedDocs
-          ? "Ask anything about the documents you've uploaded."
-          : "Head over to Documents and upload your first file to get started."}
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
+      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#0f2d52]/10">
+        <Icon className="h-6 w-6 text-[#0f2d52]" />
+      </div>
+      <h2 className="mt-4 text-lg font-semibold text-[#0f2d52]">
+        {isMulti ? "Multi-Doc Chat" : "QueryBot Chat"}
+      </h2>
+      <p className="mt-2 max-w-sm text-sm text-slate-500">
+        {!hasCompletedDocs
+          ? "Upload documents first, then start chatting with your knowledge base."
+          : isMulti && !hasSelection
+            ? "Use the document picker above to choose files, then ask questions scoped to those documents only."
+            : isMulti
+              ? "Ask questions across your selected documents. Open preview when you need to read source files."
+              : "Ask anything about your uploaded documents. Sources appear under each answer; preview files on the right."}
       </p>
     </div>
   );

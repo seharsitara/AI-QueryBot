@@ -8,7 +8,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MessagesSquare, FileText } from "lucide-react";
+import { MessagesSquare, FileText, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NavLink {
@@ -21,6 +21,12 @@ interface NavLink {
 
 const LINKS: NavLink[] = [
   { href: "/chat", label: "Chat", icon: MessagesSquare, match: ["/chat"] },
+  {
+    href: "/chat/multi",
+    label: "Multi-Doc Chat",
+    icon: Layers,
+    match: ["/chat/multi"],
+  },
   { href: "/docs", label: "Documents", icon: FileText, match: ["/docs"] },
 ];
 
@@ -30,9 +36,15 @@ export function SidebarNav() {
   return (
     <nav className="flex flex-col gap-0.5 px-2">
       {LINKS.map((link) => {
-        const isActive = link.match.some(
-          (m) => pathname === m || pathname.startsWith(`${m}/`),
-        );
+        const isActive = link.match.some((m) => {
+          if (m === "/chat") {
+            return (
+              pathname === "/chat" ||
+              (pathname.startsWith("/chat/") && !pathname.startsWith("/chat/multi"))
+            );
+          }
+          return pathname === m || pathname.startsWith(`${m}/`);
+        });
         const Icon = link.icon;
         return (
           <Link

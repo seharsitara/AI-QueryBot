@@ -33,7 +33,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-.env
 
 #pnpm
 pnpm-lock.yaml
@@ -41,3 +40,4 @@ pnpm-lock.yaml
 # Supabase local
 supabase/.branches
 supabase/.temp
+config.bat
