@@ -26,11 +26,13 @@ export default async function DashboardLayout({
   const user = await requireUser();
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-dvh w-full overflow-hidden bg-[#f8fafc]">
       <AppSidebar userEmail={user.email ?? ""} />
       {/* min-w-0 lets long chat content (e.g. wide code blocks) shrink
           inside the flex row instead of forcing horizontal scroll. */}
-      <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {children}
+      </main>
     </div>
   );
 }
