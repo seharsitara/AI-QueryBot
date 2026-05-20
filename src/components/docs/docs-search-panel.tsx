@@ -1,36 +1,32 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FileText, Loader2, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { StatusBadge } from "./status-badge";
 import { searchDocsSuggestionsAction } from "@/app/(dashboard)/docs/actions";
 import { highlightMatch } from "@/lib/utils/highlight-match";
 import { formatBytes } from "@/lib/utils/format";
 import type { Doc } from "@/types/doc";
 
-export function DocsSearchPanel() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+type DocsSearchPanelProps = {
+  onTableFilterChange: (q: string) => void;
+  isTableLoading?: boolean;
+};
 
-  const activeQ = searchParams.get("q") ?? "";
-  const [value, setValue] = useState(activeQ);
+export function DocsSearchPanel({
+  onTableFilterChange,
+  isTableLoading = false,
+}: DocsSearchPanelProps) {
+  const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<Doc[]>([]);
   const [total, setTotal] = useState(0);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const debounceUrl = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debounceTable = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debounceFetch = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestId = useRef(0);
-
-  useEffect(() => {
-    setValue(activeQ);
-  }, [activeQ]);
 
   useEffect(() => {
     function onPointerDown(e: MouseEvent) {
@@ -44,23 +40,6 @@ export function DocsSearchPanel() {
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, []);
-
-  const pushQuery = useCallback(
-    (next: string) => {
-      const params = new URLSearchParams(searchParams.toString());
-      const trimmed = next.trim();
-      if (trimmed) params.set("q", trimmed);
-      else params.delete("q");
-      params.delete("page");
-      params.delete("status");
-
-      startTransition(() => {
-        const qs = params.toString();
-        router.replace(qs ? `${pathname}?${qs}` : pathname);
-      });
-    },
-    [pathname, router, searchParams],
-  );
 
   const fetchSuggestions = useCallback(async (q: string) => {
     const trimmed = q.trim();
@@ -87,6 +66,11 @@ export function DocsSearchPanel() {
     setLoading(false);
   }, []);
 
+  function scheduleTableFilter(next: string) {
+    if (debounceTable.current) clearTimeout(debounceTable.current);
+    debounceTable.current = setTimeout(() => onTableFilterChange(next), 400);
+  }
+
   function onQueryChange(next: string) {
     setValue(next);
     setOpen(true);
@@ -94,15 +78,14 @@ export function DocsSearchPanel() {
     if (debounceFetch.current) clearTimeout(debounceFetch.current);
     debounceFetch.current = setTimeout(() => fetchSuggestions(next), 200);
 
-    if (debounceUrl.current) clearTimeout(debounceUrl.current);
-    debounceUrl.current = setTimeout(() => pushQuery(next), 400);
+    scheduleTableFilter(next);
   }
 
   function applySearch(next: string, scrollToDocId?: string) {
     setValue(next);
-    if (debounceUrl.current) clearTimeout(debounceUrl.current);
+    if (debounceTable.current) clearTimeout(debounceTable.current);
     if (debounceFetch.current) clearTimeout(debounceFetch.current);
-    pushQuery(next);
+    onTableFilterChange(next.trim());
     setOpen(false);
 
     if (scrollToDocId) {
@@ -119,16 +102,17 @@ export function DocsSearchPanel() {
     setSuggestions([]);
     setTotal(0);
     setOpen(false);
-    if (debounceUrl.current) clearTimeout(debounceUrl.current);
+    if (debounceTable.current) clearTimeout(debounceTable.current);
     if (debounceFetch.current) clearTimeout(debounceFetch.current);
-    pushQuery("");
+    onTableFilterChange("");
   }
 
   const showDropdown = open && value.trim().length > 0;
+  const showSpinner = loading || isTableLoading;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-blue-50/30 px-5 py-4 rounded-t-2xl">
+    <div className="overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="rounded-t-2xl border-b border-slate-100 bg-gradient-to-r from-slate-50 to-blue-50/30 px-5 py-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#0f2d52]">
             <Search className="h-5 w-5 text-white" />
@@ -144,7 +128,7 @@ export function DocsSearchPanel() {
         </div>
       </div>
 
-      <div className="px-5 py-4 relative" ref={containerRef}>
+      <div className="relative overflow-visible px-5 py-4" ref={containerRef}>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
@@ -158,14 +142,14 @@ export function DocsSearchPanel() {
               if (e.key === "Escape") setOpen(false);
             }}
             placeholder="Search by file name…"
-            className="h-11 border-slate-200 bg-slate-50/50 pl-10 pr-20 text-sm text-[#0f2d52] shadow-none placeholder:text-slate-400 focus-visible:ring-[#0f2d52]/20"
+            className="h-11 border-slate-200 bg-slate-50/50 pl-10 pr-20 text-sm text-[#0f2d52] shadow-none placeholder:text-slate-400 focus-visible:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f2d52]/15 focus-visible:ring-offset-0"
             aria-label="Search documents by file name"
             aria-expanded={showDropdown}
             aria-autocomplete="list"
             role="combobox"
           />
           <div className="absolute right-2 top-1/2 z-10 flex -translate-y-1/2 items-center gap-1">
-            {(loading || isPending) && (
+            {showSpinner && (
               <Loader2
                 className="h-4 w-4 animate-spin text-slate-400"
                 aria-hidden
@@ -185,7 +169,7 @@ export function DocsSearchPanel() {
 
           {showDropdown && (
             <div
-              className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 rounded-xl border border-slate-200 bg-white shadow-lg max-h-80 overflow-y-auto flex flex-col"
+              className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 flex max-h-80 flex-col overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg outline-none"
               role="listbox"
             >
               {loading && suggestions.length === 0 ? (
@@ -204,23 +188,21 @@ export function DocsSearchPanel() {
                 </div>
               ) : (
                 <>
-                  <div className="border-b border-slate-100 bg-slate-50 px-4 py-3 flex items-center justify-between sticky top-0 z-10">
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                       Results
                     </p>
                     <p className="text-sm font-semibold text-[#0f2d52]">
                       {suggestions.length} found
                     </p>
                   </div>
-                  <ul className="overflow-y-auto p-2 flex-1">
+                  <ul className="flex-1 overflow-y-auto p-2">
                     {suggestions.map((doc) => (
                       <li key={doc.id}>
                         <button
                           type="button"
                           role="option"
-                          onClick={() =>
-                            applySearch(doc.file_name, doc.id)
-                          }
+                          onClick={() => applySearch(doc.file_name, doc.id)}
                           className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors hover:bg-slate-50"
                         >
                           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#0f2d52]/10">
@@ -231,11 +213,15 @@ export function DocsSearchPanel() {
                               {highlightMatch(doc.file_name, value)}
                             </span>
                             <span className="mt-1 text-xs text-slate-500">
-                              {formatBytes(doc.file_size)} • {new Date(doc.created_at).toLocaleDateString("en-US", {
-                                month: "2-digit",
-                                day: "2-digit",
-                                year: "numeric",
-                              })}
+                              {formatBytes(doc.file_size)} •{" "}
+                              {new Date(doc.created_at).toLocaleDateString(
+                                "en-US",
+                                {
+                                  month: "2-digit",
+                                  day: "2-digit",
+                                  year: "numeric",
+                                },
+                              )}
                             </span>
                           </span>
                         </button>
@@ -243,7 +229,7 @@ export function DocsSearchPanel() {
                     ))}
                   </ul>
                   {total > suggestions.length && (
-                    <div className="border-t border-slate-100 bg-slate-50/80 px-3 py-2 sticky bottom-0">
+                    <div className="sticky bottom-0 border-t border-slate-100 bg-slate-50/80 px-3 py-2">
                       <button
                         type="button"
                         onClick={() => applySearch(value.trim())}

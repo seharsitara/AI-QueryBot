@@ -2,15 +2,7 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-
-function displayName(user: User) {
-  const meta = user.user_metadata?.full_name ?? user.user_metadata?.name;
-  if (typeof meta === "string" && meta.trim()) return meta.trim();
-  const email = user.email ?? "";
-  const local = email.split("@")[0] ?? "User";
-  return local.charAt(0).toUpperCase() + local.slice(1);
-}
+import { LandingUserMenu } from "./landing-user-menu";
 
 export function LandingHeader({ user }: { user: User | null }) {
   return (
@@ -26,19 +18,7 @@ export function LandingHeader({ user }: { user: User | null }) {
         </Link>
 
         {user ? (
-          <Link
-            href="/chat"
-            className="flex items-center gap-2.5 rounded-full border border-slate-200 bg-white py-1.5 pl-1.5 pr-4 transition-colors hover:bg-slate-50"
-          >
-            <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-[#0f2d52] text-xs font-semibold text-white">
-                {displayName(user).charAt(0).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <span className="text-sm font-medium text-[#0f2d52]">
-              {displayName(user)}
-            </span>
-          </Link>
+          <LandingUserMenu user={user} />
         ) : (
           <nav className="flex items-center gap-3">
             <Link
