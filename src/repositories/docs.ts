@@ -94,6 +94,32 @@ export async function listDocsPage(params: {
   };
 }
 
+// Quick name search for the documents page autocomplete dropdown.
+export async function searchDocsByName(
+  q: string,
+  limit = 8,
+): Promise<{ docs: Doc[]; total: number }> {
+  const trimmed = q.trim();
+  if (!trimmed) return { docs: [], total: 0 };
+
+  const supabase = await createClient();
+  const safe = trimmed.replace(/[%_]/g, (m) => `\\${m}`);
+
+  const { data, error, count } = await supabase
+    .from(TABLE)
+    .select("*", { count: "exact" })
+    .ilike("file_name", `%${safe}%`)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  return {
+    docs: (data ?? []) as Doc[],
+    total: count ?? 0,
+  };
+}
+
 // Of the given file names, return the subset the user has ALREADY
 // uploaded. Targeted lookup (WHERE user_id=… AND file_name = ANY(names))
 // — scales regardless of total doc count, unlike fetching every name.

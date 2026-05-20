@@ -4,8 +4,8 @@ import "./globals.css";
 
 // Top-level metadata. Tweaked per route via per-page `metadata` exports later.
 export const metadata: Metadata = {
-  title: "RAG Chatbot",
-  description: "Upload your docs and chat with them.",
+  title: "QueryBot",
+  description: "AI document Q&A for PDF, Word, and text files.",
 };
 
 // Root layout — keep it minimal. Per-feature layouts (auth, dashboard)
@@ -17,7 +17,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-background text-foreground antialiased">
+      <body className="min-h-dvh bg-background text-foreground antialiased">
         {children}
         {/* Global toast portal (shadcn-configured) — used for upload
             feedback, auth notices, errors, etc. */}

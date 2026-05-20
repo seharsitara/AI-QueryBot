@@ -18,9 +18,13 @@ import {
   getDocByFileName,
   deleteDocRow,
   findExistingDocNames,
+  listDocsPage,
+  searchDocsByName,
 } from "@/repositories/docs";
+import type { DocsPage } from "@/repositories/docs";
 import type { Doc } from "@/types/doc";
 import { deleteDocChunks, listDocChunks } from "@/lib/qdrant/search";
+import { summarizeDocument } from "@/lib/rag/doc-summarizer";
 import {
   ACCEPTED_MIME_TYPES,
   MAX_FILES_PER_UPLOAD,
@@ -402,6 +406,110 @@ export async function getDocChunks(
 // for this user. Targeted indexed query — does NOT enumerate the
 // user's documents, so it scales to any doc count.
 // ============================================================
+// ============================================================
+// generateDocSummary
+// ------------------------------------------------------------
+// AI summary for one completed doc. Uses scoped vector retrieval
+// (read-only) plus optional extracted-text fallback. Does not
+// touch the ingestion pipeline or chat RAG route.
+// ============================================================
+export async function generateDocSummaryAction(
+  docId: string,
+): Promise<ActionResult<{ summary: string }>> {
+  const user = await requireUser();
+
+  const doc = await getDocById(docId);
+  if (!doc) {
+    return { ok: false, error: "Document not found" };
+  }
+  if (doc.status !== "completed") {
+    return { ok: false, error: "Document is not processed yet" };
+  }
+
+  try {
+    const summary = await summarizeDocument({
+      userId: user.id,
+      docId: doc.id,
+      fileName: doc.file_name,
+    });
+    return { ok: true, data: { summary } };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (message !== "No text available to summarize.") {
+      console.error("[generateDocSummary] failed", err);
+      return {
+        ok: false,
+        error: "Could not generate summary. Please try again.",
+      };
+    }
+  }
+
+  const textRes = await getDocExtractedText(docId);
+  if (!textRes.ok) {
+    return { ok: false, error: "No text available to summarize." };
+  }
+
+  try {
+    const summary = await summarizeDocument({
+      userId: user.id,
+      docId: doc.id,
+      fileName: doc.file_name,
+      fallbackText: textRes.data.text,
+    });
+    return { ok: true, data: { summary } };
+  } catch (err) {
+    console.error("[generateDocSummary] fallback failed", err);
+    if (
+      err instanceof Error &&
+      err.message === "No text available to summarize."
+    ) {
+      return { ok: false, error: err.message };
+    }
+    return {
+      ok: false,
+      error: "Could not generate summary. Please try again.",
+    };
+  }
+}
+
+// ============================================================
+// listDocsPageAction
+// ------------------------------------------------------------
+// Client-side table fetch (search + pagination) without URL params.
+// ============================================================
+export async function listDocsPageAction(params: {
+  q?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<ActionResult<DocsPage>> {
+  await requireUser();
+  try {
+    const data = await listDocsPage(params);
+    return { ok: true, data };
+  } catch (err) {
+    console.error("[listDocsPage] failed", err);
+    return { ok: false, error: "Could not load documents" };
+  }
+}
+
+// ============================================================
+// searchDocsSuggestions
+// ------------------------------------------------------------
+// Live autocomplete for the documents search dropdown.
+// ============================================================
+export async function searchDocsSuggestionsAction(
+  q: string,
+): Promise<ActionResult<{ docs: Doc[]; total: number }>> {
+  await requireUser();
+  try {
+    const data = await searchDocsByName(q, 8);
+    return { ok: true, data };
+  } catch (err) {
+    console.error("[searchDocsSuggestions] failed", err);
+    return { ok: false, error: "Search failed" };
+  }
+}
+
 export async function checkDuplicateNames(
   names: string[],
 ): Promise<ActionResult<{ duplicates: string[] }>> {
